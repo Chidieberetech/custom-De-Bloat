@@ -18,22 +18,41 @@ $extractPath = "$templateFilePath"
 Invoke-WebRequest -Uri $zipUrl -OutFile $zipPath
 Expand-Archive -Path $zipPath -DestinationPath $extractPath -Force
 
-
 # Define apps to whitelist (comma-separated)
 $whitelistApps = ""
 
 # Define scheduled tasks to remove (empty by default).  Comma separated
 $tasksToRemove = @() -join ','
 
-# Build the arguments string with both parameters
-$arguments = " -customwhitelist `"$whitelistApps`""
+# Correct path to the script (it's in a RemoveBloat subfolder)
+$scriptPath = "$templateFilePath\RemoveBloat\RemoveBloat.ps1"
 
-# Only add the TasksToRemove parameter if there are tasks to remove
-if ($tasksToRemove) {
-    $arguments += " -TasksToRemove `"$tasksToRemove`""
+# Check if the script exists
+if (Test-Path $scriptPath) {
+    Write-Output "Found script at: $scriptPath"
+
+    # Build parameters array
+    $scriptParams = @()
+
+    if ($whitelistApps) {
+        $scriptParams += "-customwhitelist"
+        $scriptParams += $whitelistApps
+    }
+
+    if ($tasksToRemove) {
+        $scriptParams += "-TasksToRemove"
+        $scriptParams += $tasksToRemove
+    }
+
+    # Execute the script with proper syntax
+    if ($scriptParams.Count -gt 0) {
+        & $scriptPath @scriptParams
+    } else {
+        & $scriptPath
+    }
+} else {
+    Write-Error "Script not found at: $scriptPath"
+    Get-ChildItem -Path $templateFilePath -Name "*.ps1" | ForEach-Object {
+        Write-Output "Available PS1 files: $_"
+    }
 }
-
-$pathwithfile = "$templateFilePath\removebloat.ps1"
-
-# Execute the script with parameters
-invoke-expression -Command "$pathwithfile $arguments"

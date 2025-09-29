@@ -384,7 +384,6 @@ $Bloatware = @(
     "*PandoraMediaInc*"
     "*Royal Revolt*"
     "*Speed Test*"
-    "*Spotify*"
     "*Sway*"
     "*Twitter*"
     "*Wunderlist*"
@@ -439,7 +438,6 @@ $Bloatware = @(
     "MicrosoftWindows.CrossDevice"
     "MirametrixInc.GlancebyMirametrix"
     "RealtimeboardInc.RealtimeBoard"
-    "SpotifyAB.SpotifyMusic"
     "5A894077.McAfeeSecurity"
     "5A894077.McAfeeSecurity_2.1.27.0_x64__wafk5atnkzcwy"
 )
@@ -1245,203 +1243,6 @@ If (!(Test-Path $surf)) {
 New-ItemProperty -Path $surf -Name 'AllowSurfGame' -Value 0 -PropertyType DWord
 
 
-############################################################################################################
-#                                       Remove Logitech Download Assistant                                 #
-#                                                                                                          #
-############################################################################################################
-#$logi = "SOFTWARE\Microsoft\Windows\CurrentVersion\Run"
-#If ((Get-ItemProperty $logi).PSObject.Properties.Name -contains 'Logitech Download Assistant') {
-#    # Delete the key
-#    Remove-ItemProperty -Path $logi -Name 'Logitech Download Assistant'
-#    Write-Output 'Logitech Download Assistant Registry key removed.'
-#}
-
-##Remove the dll
-#$logidll = "C:\Windows\System32\LogiLDA.dll"
-#if (Test-Path $logidll) {
-#    Remove-Item $logidll -Force
-#    Write-Output "Logitech Download Assistant DLL removed."
-#} else {
-#    Write-Output "Logitech Download Assistant DLL not found."
-#}
-
-############################################################################################################
-#                                       Grab all Uninstall Strings                                         #
-#                                                                                                          #
-############################################################################################################
-
-
-write-output "Checking 32-bit System Registry"
-##Search for 32-bit versions and list them
-$allstring = @()
-$path1 = "HKLM:\SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall"
-#Loop Through the apps if name has Adobe and NOT reader
-$32apps = Get-ChildItem -Path $path1 | Get-ItemProperty | Select-Object -Property DisplayName, UninstallString
-
-foreach ($32app in $32apps) {
-    #Get uninstall string
-    $string1 = $32app.uninstallstring
-    #Check if it's an MSI install
-    if ($string1 -match "^msiexec*") {
-        #MSI install, replace the I with an X and make it quiet
-        $string2 = $string1 + " /quiet /norestart"
-        $string2 = $string2 -replace "/I", "/X "
-        #Create custom object with name and string
-        $allstring += New-Object -TypeName PSObject -Property @{
-            Name   = $32app.DisplayName
-            String = $string2
-        }
-    }
-    else {
-        #Exe installer, run straight path
-        $string2 = $string1
-        $allstring += New-Object -TypeName PSObject -Property @{
-            Name   = $32app.DisplayName
-            String = $string2
-        }
-    }
-
-}
-write-output "32-bit check complete"
-write-output "Checking 64-bit System registry"
-##Search for 64-bit versions and list them
-
-$path2 = "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall"
-#Loop Through the apps if name has Adobe and NOT reader
-$64apps = Get-ChildItem -Path $path2 | Get-ItemProperty | Select-Object -Property DisplayName, UninstallString
-
-foreach ($64app in $64apps) {
-    #Get uninstall string
-    $string1 = $64app.uninstallstring
-    #Check if it's an MSI install
-    if ($string1 -match "^msiexec*") {
-        #MSI install, replace the I with an X and make it quiet
-        $string2 = $string1 + " /quiet /norestart"
-        $string2 = $string2 -replace "/I", "/X "
-        #Uninstall with string2 params
-        $allstring += New-Object -TypeName PSObject -Property @{
-            Name   = $64app.DisplayName
-            String = $string2
-        }
-    }
-    else {
-        #Exe installer, run straight path
-        $string2 = $string1
-        $allstring += New-Object -TypeName PSObject -Property @{
-            Name   = $64app.DisplayName
-            String = $string2
-        }
-    }
-
-}
-
-write-output "64-bit checks complete"
-
-##USER
-write-output "Checking 32-bit User Registry"
-##Search for 32-bit versions and list them
-$path1 = "HKCU:\SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall"
-##Check if path exists
-if (Test-Path $path1) {
-    #Loop Through the apps if name has Adobe and NOT reader
-    $32apps = Get-ChildItem -Path $path1 | Get-ItemProperty | Select-Object -Property DisplayName, UninstallString
-
-    foreach ($32app in $32apps) {
-        #Get uninstall string
-        $string1 = $32app.uninstallstring
-        #Check if it's an MSI install
-        if ($string1 -match "^msiexec*") {
-            #MSI install, replace the I with an X and make it quiet
-            $string2 = $string1 + " /quiet /norestart"
-            $string2 = $string2 -replace "/I", "/X "
-            #Create custom object with name and string
-            $allstring += New-Object -TypeName PSObject -Property @{
-                Name   = $32app.DisplayName
-                String = $string2
-            }
-        }
-        else {
-            #Exe installer, run straight path
-            $string2 = $string1
-            $allstring += New-Object -TypeName PSObject -Property @{
-                Name   = $32app.DisplayName
-                String = $string2
-            }
-        }
-    }
-}
-write-output "32-bit check complete"
-write-output "Checking 64-bit Use registry"
-##Search for 64-bit versions and list them
-
-$path2 = "HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall"
-#Loop Through the apps if name has Adobe and NOT reader
-$64apps = Get-ChildItem -Path $path2 | Get-ItemProperty | Select-Object -Property DisplayName, UninstallString
-
-foreach ($64app in $64apps) {
-    #Get uninstall string
-    $string1 = $64app.uninstallstring
-    #Check if it's an MSI install
-    if ($string1 -match "^msiexec*") {
-        #MSI install, replace the I with an X and make it quiet
-        $string2 = $string1 + " /quiet /norestart"
-        $string2 = $string2 -replace "/I", "/X "
-        #Uninstall with string2 params
-        $allstring += New-Object -TypeName PSObject -Property @{
-            Name   = $64app.DisplayName
-            String = $string2
-        }
-    }
-    else {
-        #Exe installer, run straight path
-        $string2 = $string1
-        $allstring += New-Object -TypeName PSObject -Property @{
-            Name   = $64app.DisplayName
-            String = $string2
-        }
-    }
-
-}
-
-
-function UninstallAppFull {
-
-    param (
-        [string]$appName
-    )
-
-    # Get a list of installed applications from Programs and Features
-    $installedApps = Get-ItemProperty HKLM:\Software\Wow6432Node\Microsoft\Windows\CurrentVersion\Uninstall\*,
-    HKLM:\Software\Microsoft\Windows\CurrentVersion\Uninstall\* |
-    Where-Object { $null -ne $_.DisplayName } |
-    Select-Object DisplayName, UninstallString
-
-    $userInstalledApps = Get-ItemProperty HKCU:\Software\Microsoft\Windows\CurrentVersion\Uninstall\* |
-    Where-Object { $null -ne $_.DisplayName } |
-    Select-Object DisplayName, UninstallString
-
-    $allInstalledApps = $installedApps + $userInstalledApps | Where-Object { $_.DisplayName -eq "$appName" }
-
-    # Loop through the list of installed applications and uninstall them
-
-    foreach ($app in $allInstalledApps) {
-        $uninstallString = $app.UninstallString
-        $displayName = $app.DisplayName
-        if ($uninstallString -match "^msiexec*") {
-            #MSI install, replace the I with an X and make it quiet
-            $string2 = $uninstallString + " /quiet /norestart"
-            $string2 = $string2 -replace "/I", "/X "
-        }
-        else {
-            #Exe installer, run straight path
-            $string2 = $uninstallString
-        }
-        write-output "Uninstalling: $displayName"
-        Start-Process $string2
-        write-output "Uninstalled: $displayName" -ForegroundColor Green
-    }
-}
-
 
 ############################################################################################################
 #                                        Remove Manufacturer Bloat                                         #
@@ -2237,67 +2038,8 @@ if ($mcafeeinstalled -eq "true") {
 }
 
 
-##Look for anything else
 
-##Make sure Intune hasn't installed anything so we don't remove installed apps
-
-$intunepath = "HKLM:\SOFTWARE\Microsoft\IntuneManagementExtension\Win32Apps"
-$intunecomplete = @(Get-ChildItem $intunepath).count
-$userpath = "HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\ProfileList"
-$userprofiles = Get-ChildItem $userpath | Get-ItemProperty
-
-$nonAdminLoggedOn = $false
-foreach ($user in $userprofiles) {
-    # Exclude default, system, and network service profiles, and the Administrator profile
-    if ($user.PSChildName -notin '.DEFAULT', 'S-1-5-18', 'S-1-5-19', 'S-1-5-20' -and $user.PSChildName -notmatch 'S-1-5-21-\d+-\d+-\d+-500') {
-        $nonAdminLoggedOn = $true
-        break
-    }
-}
-$TypeDef = @"
-
-using System;
-using System.Text;
-using System.Collections.Generic;
-using System.Runtime.InteropServices;
-
-namespace Api
-{
- public class Kernel32
- {
-   [DllImport("kernel32.dll", CharSet = CharSet.Auto, SetLastError = true)]
-   public static extern int OOBEComplete(ref int bIsOOBEComplete);
- }
-}
-"@
-
-Add-Type -TypeDefinition $TypeDef -Language CSharp
-
-$IsOOBEComplete = $false
-$hr = [Api.Kernel32]::OOBEComplete([ref] $IsOOBEComplete)
-
-
-if ($IsOOBEComplete -eq 0) {
-
-    write-output "Still in OOBE, continue"
-    ##Apps to remove - NOTE: Chrome has an unusual uninstall so sort on it's own
-    $blacklistapps = @(
-
-    )
-
-
-    foreach ($blacklist in $blacklistapps) {
-
-        UninstallAppFull -appName $blacklist
-
-    }
-
-
-
-
-
-
-    ## The XML below will Remove Retail Copies of Office 365 and OneNote, including all languages. Note: Office Apps for Entreprise Editions will remain.
+    ## The XML below will Remove Retail Copies of Office 365, including all languages. Note: Office Apps for Entreprise Editions will remain.
 
     ##Check if they are installed first
 
@@ -2309,7 +2051,6 @@ if ($IsOOBEComplete -eq 0) {
   <Property Name="FORCEAPPSHUTDOWN" Value="True" />
   <Remove>
     <Product ID="O365HomePremRetail"/>
-    <Product ID="OneNoteFreeRetail"/>
   </Remove>
 </Configuration>
 "@
@@ -2320,14 +2061,14 @@ if ($IsOOBEComplete -eq 0) {
 
     ## Remove All Office Products XML Start ##
 
-    #$xml = @"
-    #<Configuration>
-    #  <Display Level="None" AcceptEULA="True" />
-    #  <Property Name="FORCEAPPSHUTDOWN" Value="True" />
-    #  <Remove All="TRUE">
-    #  </Remove>
-    #</Configuration>
-    #"@
+    $xml = @"
+    <Configuration>
+      <Display Level="None" AcceptEULA="True" />
+      <Property Name="FORCEAPPSHUTDOWN" Value="True" />
+      <Remove All="TRUE">
+      </Remove>
+    </Configuration>
+    "@
 
     ## Remove All Office Products XML End
 

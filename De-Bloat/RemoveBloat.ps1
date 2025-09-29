@@ -37,7 +37,6 @@ C:\ProgramData\Debloat\Debloat.log
   Change 07/03/2023 - Enabled Location tracking (with commenting to disable)
   Change 08/03/2023 - Teams chat fix
   Change 10/03/2023 - Dell array fix
-  Change 19/04/2023 - Added loop through all users for HKCU keys for post-OOBE deployments
   Change 29/04/2023 - Removes News Feed
   Change 26/05/2023 - Added Set-ACL
   Change 26/05/2023 - Added multi-language support for Set-ACL commands
@@ -51,7 +50,6 @@ C:\ProgramData\Debloat\Debloat.log
   Change 09/10/2023 - Dell Command Update change
   Change 11/10/2023 - Grab all uninstall strings and use native uninstaller instead of uninstall-package
   Change 14/10/2023 - Updated HP Audio package name
-  Change 31/10/2023 - Added PowerAutomateDesktop and update Microsoft.Todos
   Change 01/11/2023 - Added fix for Windows backup removing Shell Components
   Change 06/11/2023 - Removes Windows CoPilot
   Change 07/11/2023 - HKU fix
@@ -110,7 +108,6 @@ C:\ProgramData\Debloat\Debloat.log
   Change 19/08/2024 - Added blacklist and whitelist for further protection
   Change 22/08/2024 - Added Poly Lens for HP
   Change 02/09/2024 - Added all possible languages to Office Home removal
-  Change 03/09/2024 - OOBE Logic update for Win32 app removal
   Change 04/09/2024 - Lenovo updates
   Change 17/09/2024 - Added HP Wolf Security
   Change 18/09/2024 - Removed ODT for office removal to speed up script
@@ -119,7 +116,6 @@ C:\ProgramData\Debloat\Debloat.log
   Change 08/10/2024 - ODT Fix
   Change 04/11/2024 - Block games in search bar
   Change 03/12/2024 - Fix for HP AppxPackage Removal
-  Change 10/12/2024 - Added registry keys to not display screens during OOBE when using Device prep (thanks Rudy)
   Change 07/01/2025 - Added spotlight removal keys
   Change 10/01/2025 - Added Lenovo Now
   Change 21/01/2025 - Edge Surf game fix
@@ -909,9 +905,9 @@ $task1 = Get-ScheduledTask -TaskName XblGameSaveTaskLogon -ErrorAction SilentlyC
 if ($null -ne $task1) {
     Get-ScheduledTask  XblGameSaveTaskLogon | Disable-ScheduledTask -ErrorAction SilentlyContinue
 }
-$task2 = Get-ScheduledTask -TaskName XblGameSaveTask -ErrorAction SilentlyContinue
+$task2 = Get-ScheduledTask -TaskName XblGameSave -ErrorAction SilentlyContinue
 if ($null -ne $task2) {
-    Get-ScheduledTask  XblGameSaveTask | Disable-ScheduledTask -ErrorAction SilentlyContinue
+    Get-ScheduledTask  XblGameSave | Disable-ScheduledTask -ErrorAction SilentlyContinue
 }
 $task3 = Get-ScheduledTask -TaskName Consolidator -ErrorAction SilentlyContinue
 if ($null -ne $task3) {
@@ -929,18 +925,6 @@ $task6 = Get-ScheduledTask -TaskName DmClientOnScenarioDownload -ErrorAction Sil
 if ($null -ne $task6) {
     Get-ScheduledTask  DmClientOnScenarioDownload | Disable-ScheduledTask -ErrorAction SilentlyContinue
 }
-
-
-############################################################################################################
-#                                             Disable Services                                             #
-#                                                                                                          #
-############################################################################################################
-##write-output "Stopping and disabling Diagnostics Tracking Service"
-#Disabling the Diagnostics Tracking Service
-##Stop-Service "DiagTrack"
-##Set-Service "DiagTrack" -StartupType Disabled
-
-
 ############################################################################################################
 #                                             Disable Scheduled Tasks                                      #
 #                                                                                                          #
@@ -1229,7 +1213,7 @@ else {
 }
 
 New-ItemProperty -Path "HKLM:\Software\Policies\Microsoft\Windows\GameDVR" -Name "AllowgameDVR" -PropertyType DWORD -Value 0 -Force
-New-ItemProperty -Path "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\Explorer" -Name "SettingsPageVisibility" -PropertyType String -Value "hide:gaming-gamebar;gaming-gamedvr;gaming-broadcasting;gaming-gamemode;gaming-xboxnetworking" -Force
+New-ItemProperty -Path "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\Explorer" -Name "SettingsPageVisibility" -PropertyType String -Value "hide:gaming-gamebar;gaming-gamemode;gaming-xboxnetworking" -Force
 Remove-Item C:\Windows\Temp\SetACL.exe -recurse
 
 ############################################################################################################
@@ -1293,11 +1277,7 @@ if ($manufacturer -like "*HP*") {
 
     $UninstallPrograms = $UninstallPrograms | Where-Object { $appstoignore -notcontains $_ }
 
-    #$HPidentifier = "AD2F1837"
-
-    #$ProvisionedPackages = Get-AppxProvisionedPackage -Online | Where-Object {(($UninstallPrograms -contains $_.DisplayName) -or (($_.DisplayName -like "*$HPidentifier"))-and ($_.DisplayName -notin $WhitelistedApps))}
-
-    #$InstalledPackages = Get-AppxPackage -AllUsers | Where-Object {(($UninstallPrograms -contains $_.Name) -or (($_.Name -like "^$HPidentifier"))-and ($_.Name -notin $WhitelistedApps))}
+    # Removed potentially dangerous commented lines that could remove apps too broadly
 
     $InstalledPrograms = $allstring | Where-Object { $UninstallPrograms -contains $_.Name }
     foreach ($app in $UninstallPrograms) {
@@ -1329,7 +1309,7 @@ if ($manufacturer -like "*HP*") {
 
     ##Belt and braces, remove via CIM too
     #foreach ($program in $UninstallPrograms) {
-    #    Get-CimInstance -Classname Win32_Product | Where-Object Name -Match $program | Invoke-CimMethod -MethodName UnInstall
+    #    Get-CimInstance -Classname Win32_Product | Where-Object Name -Match $program | Invoke-CimMethod -MethodName Uninstall
     #}
 
 
@@ -1566,13 +1546,11 @@ if ($manufacturer -like "*Dell*") {
         UninstallAppFull -appName $app
 
 
-
     }
 
     ##Belt and braces, remove via CIM too
     #foreach ($program in $UninstallPrograms) {
-    #    write-output "Removing $program"
-    #    Get-CimInstance -Query "SELECT * FROM Win32_Product WHERE name = '$program'" | Invoke-CimMethod -MethodName Uninstall
+    #    Get-CimInstance -Classname Win32_Product | Where-Object Name -Match $program | Invoke-CimMethod -MethodName Uninstall
     #}
 
     ##Manual Removals
@@ -1672,8 +1650,7 @@ if ($manufacturer -like "Lenovo") {
         )
 
         # Get a list of installed applications from Programs and Features
-        $installedApps = Get-ItemProperty HKLM:\Software\Wow6432Node\Microsoft\Windows\CurrentVersion\Uninstall\*,
-        HKLM:\Software\Microsoft\Windows\CurrentVersion\Uninstall\* |
+        $installedApps = Get-ItemProperty HKLM:\Software\Wow6432Node\Microsoft\Windows\CurrentVersion\Uninstall\* |
         Where-Object { $_.DisplayName -like "*$appName*" }
 
         # Loop through the list of installed applications and uninstall them
@@ -1762,7 +1739,7 @@ if ($manufacturer -like "Lenovo") {
 
     ##Belt and braces, remove via CIM too
     #foreach ($program in $UninstallPrograms) {
-    #    Get-CimInstance -Classname Win32_Product | Where-Object Name -Match $program | Invoke-CimMethod -MethodName UnInstall
+    #    Get-CimInstance -Classname Win32_Product | Where-Object Name -Match $program | Invoke-CimMethod -MethodName Uninstall
     #}
 
     # Get Lenovo Vantage service uninstall string to uninstall service
@@ -2045,15 +2022,37 @@ if ($mcafeeinstalled -eq "true") {
 
 
     ## Remove Retail Copies XML Start ##
-    $xml = @"
+$xml = @"
 <Configuration>
   <Display Level="None" AcceptEULA="True" />
   <Property Name="FORCEAPPSHUTDOWN" Value="True" />
   <Remove>
+    <!-- Microsoft 365 (consumer) -->
     <Product ID="O365HomePremRetail"/>
+
+    <!-- Perpetual consumer (2021/2019 & legacy names) -->
+    <Product ID="HomeStudent2021Retail"/>
+    <Product ID="HomeBusiness2021Retail"/>
+    <Product ID="Professional2021Retail"/>
+
+    <Product ID="HomeStudent2019Retail"/>
+    <Product ID="HomeBusiness2019Retail"/>
+    <Product ID="Professional2019Retail"/>
+
+    <!-- Legacy catch-alls some OEMs still use -->
+    <Product ID="HomeStudentRetail"/>
+    <Product ID="HomeBusinessRetail"/>
+    <Product ID="ProfessionalRetail"/>
+
+    <!-- Consumer Visio/Project retail -->
+    <Product ID="VisioStdRetail"/>
+    <Product ID="VisioProRetail"/>
+    <Product ID="ProjectStdRetail"/>
+    <Product ID="ProjectProRetail"/>
   </Remove>
 </Configuration>
 "@
+
     ## Remove Retail Copies XML End ##
 
 
@@ -2061,14 +2060,14 @@ if ($mcafeeinstalled -eq "true") {
 
     ## Remove All Office Products XML Start ##
 
-    $xml = @"
-    <Configuration>
-      <Display Level="None" AcceptEULA="True" />
-      <Property Name="FORCEAPPSHUTDOWN" Value="True" />
-      <Remove All="TRUE">
-      </Remove>
-    </Configuration>
-    "@
+  ##  $xml = @"
+##<Configuration>
+  ##<Display Level="None" AcceptEULA="True" />
+  ##<Property Name="FORCEAPPSHUTDOWN" Value="True" />
+  ##<Remove All="TRUE">
+  ##</Remove>
+##</Configuration>
+  ##"@
 
     ## Remove All Office Products XML End
 
@@ -2083,12 +2082,12 @@ if ($mcafeeinstalled -eq "true") {
     ##Run it
     Start-Process -FilePath "C:\ProgramData\Debloat\setup.exe" -ArgumentList "/configure C:\ProgramData\Debloat\o365.xml" -WindowStyle Hidden -Wait
 
-}
-else {
-    write-output "Intune detected, skipping removal of apps"
-    write-output "$intunecomplete number of apps detected"
+    write-output "Removed Office Retail Installations"
 
-}
+# Clean up Debloat folder
+Remove-Item -Path "C:\ProgramData\Debloat" -Recurse -Force
+# Stop Transcript
+# Record the stop time
 
 $stopUtc = [datetime]::UtcNow
 

@@ -413,19 +413,15 @@ $Bloatware = @(
     "Microsoft.MPEG2VideoExtension"
     "Microsoft.News"
     "Microsoft.Office.Lens"
-    "Microsoft.Office.OneNote"
     "Microsoft.Office.Sway"
     "Microsoft.OneConnect"
     "Microsoft.People"
     "Microsoft.PowerAutomateDesktop"
     "Microsoft.PowerAutomateDesktopCopilotPlugin"
     "Microsoft.Print3D"
-    "Microsoft.RemoteDesktop"
     "Microsoft.SkypeApp"
     "Microsoft.SysinternalsSuite"
-    "Microsoft.Teams"
     "Microsoft.Windows.DevHome"
-    "Microsoft.WindowsAlarms"
     "Microsoft.windowscommunicationsapps"
     "Microsoft.WindowsFeedbackHub"
     "Microsoft.WindowsMaps"
@@ -446,23 +442,6 @@ $Bloatware = @(
     "SpotifyAB.SpotifyMusic"
     "5A894077.McAfeeSecurity"
     "5A894077.McAfeeSecurity_2.1.27.0_x64__wafk5atnkzcwy"
-    #Optional: Typically not removed but you can if you need to for some reason
-    #"*Microsoft.Advertising.Xaml_10.1712.5.0_x64__8wekyb3d8bbwe*"
-    #"*Microsoft.Advertising.Xaml_10.1712.5.0_x86__8wekyb3d8bbwe*"
-    #"*Microsoft.BingWeather*"
-    #"*Microsoft.MSPaint*"
-    #"*Microsoft.MicrosoftStickyNotes*"
-    #"*Microsoft.Windows.Photos*"
-    #"*Microsoft.WindowsCalculator*"
-    #"Microsoft.Office.Todo.List"
-    #"Microsoft.Whiteboard"
-    #"Microsoft.WindowsCamera"
-    #"Microsoft.WindowsSoundRecorder"
-    #"Microsoft.YourPhone"
-    #"Microsoft.Todos"
-    #"MSTeams"
-    #"Microsoft.PowerAutomateDesktop"
-    #"MicrosoftWindows.Client.WebExperience"
 )
 
 
@@ -809,28 +788,6 @@ else {
 
 ##Kill Cortana again
 Get-AppxPackage Microsoft.549981C3F5F10 -allusers | Remove-AppxPackage
-
-
-
-############################################################################################################
-#                                   Disable unwanted OOBE screens for Device Prep                          #
-#                                                                                                          #
-############################################################################################################
-
-$registryPath = "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\OOBE"
-$registryPath2 = "HKLM:\Software\Microsoft\Windows\CurrentVersion\Policies\System"
-$Name1 = "DisablePrivacyExperience"
-$Name2 = "DisableVoice"
-$Name3 = "PrivacyConsentStatus"
-$Name4 = "Protectyourpc"
-$Name5 = "HideEULAPage"
-$Name6 = "EnableFirstLogonAnimation"
-New-ItemProperty -Path $registryPath -Name $name1 -Value 1 -PropertyType DWord -Force
-New-ItemProperty -Path $registryPath -Name $name2 -Value 1 -PropertyType DWord -Force
-New-ItemProperty -Path $registryPath -Name $name3 -Value 1 -PropertyType DWord -Force
-New-ItemProperty -Path $registryPath -Name $name4 -Value 3 -PropertyType DWord -Force
-New-ItemProperty -Path $registryPath -Name $name5 -Value 1 -PropertyType DWord -Force
-New-ItemProperty -Path $registryPath2 -Name $name6 -Value 0 -PropertyType DWord -Force
 
 
 
@@ -1604,9 +1561,9 @@ if ($manufacturer -like "*HP*") {
     if (Test-Path -Path "C:\ProgramData\Microsoft\Windows\Start Menu\Programs\Miro Offer.lnk" -PathType Leaf) { Remove-Item -Path "C:\ProgramData\Microsoft\Windows\Start Menu\Programs\Miro offer.lnk" -Force }
 
     ##Remove Wolf Security
-    #Get-CimInstance -ClassName Win32_Product | Where-Object { $_.Name -eq 'HP Wolf Security' } | Invoke-CimMethod -MethodName Uninstall
-    #Get-CimInstance -ClassName Win32_Product | Where-Object { $_.Name -eq 'HP Wolf Security - Console' } | Invoke-CimMethod -MethodName Uninstall
-    #Get-CimInstance -ClassName Win32_Product | Where-Object { $_.Name -eq 'HP Security Update Service' } | Invoke-CimMethod -MethodName Uninstall
+    Get-CimInstance -ClassName Win32_Product | Where-Object { $_.Name -eq 'HP Wolf Security' } | Invoke-CimMethod -MethodName Uninstall
+    Get-CimInstance -ClassName Win32_Product | Where-Object { $_.Name -eq 'HP Wolf Security - Console' } | Invoke-CimMethod -MethodName Uninstall
+    Get-CimInstance -ClassName Win32_Product | Where-Object { $_.Name -eq 'HP Security Update Service' } | Invoke-CimMethod -MethodName Uninstall
 
     # Main execution
     Write-Log "Starting HP security package uninstallation process"
@@ -2336,35 +2293,7 @@ if ($IsOOBEComplete -eq 0) {
     }
 
 
-    ##Remove Chrome
-    $chrome32path = "HKLM:\SOFTWARE\Wow6432Node\Microsoft\Windows\CurrentVersion\Uninstall\Google Chrome"
 
-    if ($null -ne $chrome32path) {
-
-        $versions = (Get-ItemProperty -path 'HKLM:\SOFTWARE\Wow6432Node\Microsoft\Windows\CurrentVersion\Uninstall\Google Chrome').version
-        ForEach ($version in $versions) {
-            write-output "Found Chrome version $version"
-            $directory = ${env:ProgramFiles(x86)}
-            write-output "Removing Chrome"
-            Start-Process "$directory\Google\Chrome\Application\$version\Installer\setup.exe" -argumentlist  "--uninstall --multi-install --chrome --system-level --force-uninstall"
-        }
-
-    }
-
-    $chromepath = "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\Google Chrome"
-
-    if ($null -ne $chromepath) {
-
-        $versions = (Get-ItemProperty -path 'HKLM:\SOFTWARE\Wow6432Node\Microsoft\Windows\CurrentVersion\Uninstall\Google Chrome').version
-        ForEach ($version in $versions) {
-            write-output "Found Chrome version $version"
-            $directory = ${env:ProgramFiles}
-            write-output "Removing Chrome"
-            Start-Process "$directory\Google\Chrome\Application\$version\Installer\setup.exe" -argumentlist  "--uninstall --multi-install --chrome --system-level --force-uninstall"
-        }
-
-
-    }
 
 
 

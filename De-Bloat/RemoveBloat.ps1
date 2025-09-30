@@ -198,6 +198,79 @@ Else {
 
 Start-Transcript -Path "C:\ProgramData\Debloat\Debloat.log"
 
+function UninstallAppFull {
+    param (
+        [string]$appName
+    )
+
+    Write-Output "Looking for applications matching: $appName"
+
+    # Get list of installed applications from registry (both 32-bit and 64-bit)
+    $registryPaths = @(
+        "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\*",
+        "HKLM:\SOFTWARE\Wow6432Node\Microsoft\Windows\CurrentVersion\Uninstall\*"
+    )
+
+    $foundApps = @()
+    foreach ($registryPath in $registryPaths) {
+        $apps = Get-ItemProperty -Path $registryPath -ErrorAction SilentlyContinue |
+                Where-Object { $_.DisplayName -like "*$appName*" -and $_.UninstallString }
+        $foundApps += $apps
+    }
+
+    if ($foundApps.Count -eq 0) {
+        Write-Output "No installed applications found matching: $appName"
+        return
+    }
+
+    foreach ($app in $foundApps) {
+        $displayName = $app.DisplayName
+        $uninstallString = $app.UninstallString
+        $quietUninstallString = $app.QuietUninstallString
+
+        Write-Output "Found application: $displayName"
+        Write-Output "Attempting to uninstall: $displayName"
+
+        try {
+            # Try quiet uninstall string first if available
+            if ($quietUninstallString) {
+                Write-Output "Using quiet uninstall string for: $displayName"
+                if ($quietUninstallString -match "msiexec") {
+                    Start-Process "cmd.exe" -ArgumentList "/c $quietUninstallString /quiet" -Wait -NoNewWindow
+                } else {
+                    $parts = $quietUninstallString -split ' ', 2
+                    $exe = $parts[0].Trim('"')
+                    $args = if ($parts.Count -gt 1) { $parts[1] } else { "" }
+                    Start-Process -FilePath $exe -ArgumentList $args -Wait -NoNewWindow
+                }
+            }
+            # Fall back to regular uninstall string
+            elseif ($uninstallString) {
+                Write-Output "Using standard uninstall string for: $displayName"
+                if ($uninstallString -match "msiexec") {
+                    # For MSI packages, add quiet parameters
+                    $modifiedString = $uninstallString
+                    if ($uninstallString -match "/I{") {
+                        $modifiedString = $uninstallString -replace "/I", "/X"
+                    }
+                    Start-Process "cmd.exe" -ArgumentList "/c $modifiedString /quiet /norestart" -Wait -NoNewWindow
+                } else {
+                    # For EXE uninstallers, try to add silent parameters
+                    $parts = $uninstallString -split ' ', 2
+                    $exe = $parts[0].Trim('"')
+                    $args = if ($parts.Count -gt 1) { $parts[1] + " /S /silent" } else { "/S /silent" }
+                    Start-Process -FilePath $exe -ArgumentList $args -Wait -NoNewWindow
+                }
+            }
+
+            Write-Output "Successfully processed uninstall for: $displayName"
+        }
+        catch {
+            Write-Output "Failed to uninstall: $displayName. Error: $_"
+        }
+    }
+}
+
 function Remove-CustomScheduledTasks {
     param (
         [string[]]$TaskNames
@@ -1275,9 +1348,7 @@ if ($manufacturer -like "*HP*") {
 
     $UninstallPrograms = $UninstallPrograms | Where-Object { $appstoignore -notcontains $_ }
 
-    # Removed potentially dangerous commented lines that could remove apps too broadly
-
-    $InstalledPrograms = $allstring | Where-Object { $UninstallPrograms -contains $_.Name }
+    # Only attempt to uninstall HP-specific applications
     foreach ($app in $UninstallPrograms) {
 
         if (Get-AppxProvisionedPackage -Online | Where-Object DisplayName -like $app -ErrorAction SilentlyContinue) {
@@ -1297,8 +1368,6 @@ if ($manufacturer -like "*HP*") {
         }
 
         UninstallAppFull -appName $app
-
-
     }
 
 
@@ -1374,7 +1443,7 @@ foreach ($pattern in $packagePatterns) {
         $packages = Get-ItemProperty -Path $registryPath -ErrorAction SilentlyContinue | 
                     Where-Object { $_.DisplayName -match $patternName }
         
-        # Filter by minimum version if specified
+               # Filter by minimum version if specified
         if ($minVersion -and $packages) {
             $packages = $packages | Where-Object { 
                 if ($_.DisplayVersion) {
@@ -1447,16 +1516,11 @@ foreach ($pattern in $packagePatterns) {
                     $uninstallCommand = $uninstallString + " /quiet"
                     Start-Process "cmd.exe" -ArgumentList "/c $uninstallCommand" -Wait -NoNewWindow
                 } else {
-                    # For EXE-based uninstalls
+                    # For EXE-based uninstalls, try to add silent parameters
                     $uninstallParts = $uninstallString -split ' ', 2
                     $uninstallExe = $uninstallParts[0].Trim('"')
-                    $uninstallArgs = if ($uninstallParts.Count -gt 1) { $uninstallParts[1] } else { "" }
-                    
-                    # Add silent parameters for common installers
-                    if ($uninstallString -match "uninstall.exe|uninst.exe|setup.exe|installer.exe") {
-                        $uninstallArgs += " /S /silent /quiet /uninstall"
-                    }
-                    
+                    $uninstallArgs = if ($uninstallParts.Count -gt 1) { $uninstallParts[1] + " /S /silent /quiet /uninstall" } else { "/S /silent /quiet /uninstall" }
+
                     Start-Process -FilePath $uninstallExe -ArgumentList $uninstallArgs -Wait -NoNewWindow
                 }
                 Write-Output "Standard uninstall completed for: $displayName"
@@ -1704,9 +1768,7 @@ if ($manufacturer -like "Lenovo") {
 
 
 
-    $InstalledPrograms = $allstring | Where-Object { (($_.Name -in $UninstallPrograms)) }
-
-
+    # Only attempt to uninstall Lenovo-specific applications
     foreach ($app in $UninstallPrograms) {
 
         if (Get-AppxProvisionedPackage -Online | Where-Object DisplayName -like $app -ErrorAction SilentlyContinue) {
@@ -1726,7 +1788,6 @@ if ($manufacturer -like "Lenovo") {
         }
 
         UninstallAppFull -appName $app
-
 
     }
 
@@ -1953,11 +2014,23 @@ if ($mcafeeinstalled -eq "true") {
     start-process "C:\ProgramData\Debloat\mcnew\Mccleanup.exe" -ArgumentList "-p StopServices,MFSY,PEF,MXD,CSP,Sustainability,MOCP,MFP,APPSTATS,Auth,EMproxy,FWdiver,HW,MAS,MAT,MBK,MCPR,McProxy,McSvcHost,VUL,MHN,MNA,MOBK,MPFP,MPFPCU,MPS,SHRED,MPSCU,MQC,MQCCU,MSAD,MSHR,MSK,MSKCU,MWL,NMC,RedirSvc,VS,REMEDIATION,MSC,YAP,TRUEKEY,LAM,PCB,Symlink,SafeConnect,MGS,WMIRemover,RESIDUE -v -s"
     write-output "McAfee Removal Tool has been run"
 
-    $InstalledPrograms = $allstring | Where-Object { ($_.Name -like "*McAfee*") }
-    $InstalledPrograms | ForEach-Object {
+    # Get McAfee applications from registry for removal
+    $mcafeeApps = @()
+    $registryPaths = @(
+        "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\*",
+        "HKLM:\SOFTWARE\Wow6432Node\Microsoft\Windows\CurrentVersion\Uninstall\*"
+    )
 
-        write-output "Attempting to uninstall: [$($_.Name)]..."
-        $uninstallcommand = $_.String
+    foreach ($registryPath in $registryPaths) {
+        $apps = Get-ItemProperty -Path $registryPath -ErrorAction SilentlyContinue |
+                Where-Object { $_.DisplayName -like "*McAfee*" -and $_.UninstallString }
+        $mcafeeApps += $apps
+    }
+
+    $mcafeeApps | ForEach-Object {
+
+        write-output "Attempting to uninstall: [$($_.DisplayName)]..."
+        $uninstallcommand = $_.UninstallString
 
         Try {
             if ($uninstallcommand -match "^msiexec*") {
@@ -1973,106 +2046,11 @@ if ($mcafeeinstalled -eq "true") {
                 $string2 = $uninstallcommand
                 start-process $string2
             }
-            #$A = Start-Process -FilePath $uninstallcommand -Wait -passthru -NoNewWindow;$a.ExitCode
-            #$Null = $_ | Uninstall-Package -AllVersions -Force -ErrorAction Stop
-            write-output "Successfully uninstalled: [$($_.Name)]"
+            write-output "Successfully uninstalled: [$($_.DisplayName)]"
         }
-        Catch { Write-Warning -Message "Failed to uninstall: [$($_.Name)]" }
+        Catch { Write-Warning -Message "Failed to uninstall: [$($_.DisplayName)]" }
     }
-
-    ##Remove Safeconnect
-    $safeconnects = Get-ChildItem -Path HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall, HKLM:\SOFTWARE\Wow6432Node\Microsoft\Windows\CurrentVersion\Uninstall | Get-ItemProperty | Where-Object { $_.DisplayName -match "McAfee Safe Connect" } | Select-Object -Property UninstallString
-
-    ForEach ($sc in $safeconnects) {
-        If ($sc.UninstallString) {
-            cmd.exe /c $sc.UninstallString /quiet /norestart
-        }
-    }
-
-    ##
-    ##remove some extra leftover Mcafee items from StartMenu-AllApps and uninstall registry keys
-    ##
-    if (Test-Path -Path "C:\ProgramData\Microsoft\Windows\Start Menu\Programs\McAfee") {
-        Remove-Item -Path "C:\ProgramData\Microsoft\Windows\Start Menu\Programs\McAfee" -Recurse -Force
-    }
-    if (Test-Path -Path "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\McAfee.WPS") {
-        Remove-Item -Path "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\McAfee.WPS" -Recurse -Force
-    }
-    #Interesting emough, this producese an error, but still deletes the package anyway
-    get-appxprovisionedpackage -online | sort-object displayname | format-table displayname, packagename
-    get-appxpackage -allusers | sort-object name | format-table name, packagefullname
-    Get-AppxProvisionedPackage -Online | Where-Object DisplayName -eq "McAfeeWPSSparsePackage" | Remove-AppxProvisionedPackage -Online -AllUsers
 }
-
-
-
-    ## The XML below will Remove Retail Copies of Office 365, including all languages. Note: Office Apps for Entreprise Editions will remain.
-
-    ##Check if they are installed first
-
-
-    ## Remove Retail Copies XML Start ##
-$xml = @"
-<Configuration>
-  <Display Level="None" AcceptEULA="True" />
-  <Property Name="FORCEAPPSHUTDOWN" Value="True" />
-  <Remove>
-    <!-- Microsoft 365 (consumer) -->
-    <Product ID="O365HomePremRetail"/>
-
-    <!-- Perpetual consumer (2021/2019 & legacy names) -->
-    <Product ID="HomeStudent2021Retail"/>
-    <Product ID="HomeBusiness2021Retail"/>
-    <Product ID="Professional2021Retail"/>
-
-    <Product ID="HomeStudent2019Retail"/>
-    <Product ID="HomeBusiness2019Retail"/>
-    <Product ID="Professional2019Retail"/>
-
-    <!-- Legacy catch-alls some OEMs still use -->
-    <Product ID="HomeStudentRetail"/>
-    <Product ID="HomeBusinessRetail"/>
-    <Product ID="ProfessionalRetail"/>
-
-    <!-- Consumer Visio/Project retail -->
-    <Product ID="VisioStdRetail"/>
-    <Product ID="VisioProRetail"/>
-    <Product ID="ProjectStdRetail"/>
-    <Product ID="ProjectProRetail"/>
-  </Remove>
-</Configuration>
-"@
-
-    ## Remove Retail Copies XML End ##
-
-
-    ## The XML below will Remove All Microsoft C2Rs ( Click-to-Runs), regardless of Product ID and Languages. To remove All Comment out or remove the XML block between Start and End above. Then Uncomment the XML below.
-
-    ## Remove All Office Products XML Start ##
-
-  ##  $xml = @"
-##<Configuration>
-  ##<Display Level="None" AcceptEULA="True" />
-  ##<Property Name="FORCEAPPSHUTDOWN" Value="True" />
-  ##<Remove All="TRUE">
-  ##</Remove>
-##</Configuration>
-  ##"@
-
-    ## Remove All Office Products XML End
-
-    ##write XML to the debloat folder
-    $xml | Out-File -FilePath "C:\ProgramData\Debloat\o365.xml"
-
-    ##Download the Latest ODT URI obtained from Stealthpuppy's Evergreen PS Module
-    $odturl = "https://officecdn.microsoft.com/pr/wsus/setup.exe"
-    $odtdestination = "C:\ProgramData\Debloat\setup.exe"
-    Invoke-WebRequest -Uri $odturl -OutFile $odtdestination -Method Get -UseBasicParsing
-
-    ##Run it
-    Start-Process -FilePath "C:\ProgramData\Debloat\setup.exe" -ArgumentList "/configure C:\ProgramData\Debloat\o365.xml" -WindowStyle Hidden -Wait
-
-    write-output "Removed Office Retail Installations"
 
 # Clean up Debloat folder
 Remove-Item -Path "C:\ProgramData\Debloat" -Recurse -Force

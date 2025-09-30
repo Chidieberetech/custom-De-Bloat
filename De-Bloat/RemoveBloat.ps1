@@ -155,7 +155,9 @@ N/A
 ############################################################################################################
 param (
     [string[]]$customwhitelist,
-    [string[]]$TasksToRemove  # Add this parameter for scheduled tasks to remove
+    [string[]]$TasksToRemove,  # Add this parameter for scheduled tasks to remove
+    [switch]$ReportOnly,       # NEW: Only produce a report of what would be removed
+    [string]$RemovalReportPath = 'C:\ProgramData\Debloat\RemovalPlan.txt'
 )
 
 ##Elevate if needed
@@ -202,7 +204,12 @@ function UninstallAppFull {
         [string]$appName
     )
 
-    Write-Output "Looking for applications matching: $appName"
+    if ([string]::IsNullOrWhiteSpace($appName)) {
+        Write-Output "Skipping blank app name passed to UninstallAppFull"
+        return
+    }
+
+    Write-Output "Looking for applications EXACT matching: $appName"
 
     # Get list of installed applications from registry (both 32-bit and 64-bit)
     $registryPaths = @(
@@ -213,12 +220,12 @@ function UninstallAppFull {
     $foundApps = @()
     foreach ($registryPath in $registryPaths) {
         $apps = Get-ItemProperty -Path $registryPath -ErrorAction SilentlyContinue |
-                Where-Object { $_.DisplayName -like "*$appName*" -and $_.UninstallString }
+                Where-Object { $_.DisplayName -eq $appName -and $_.UninstallString }
         $foundApps += $apps
     }
 
     if ($foundApps.Count -eq 0) {
-        Write-Output "No installed applications found matching: $appName"
+        Write-Output "No installed applications found EXACT matching: $appName"
         return
     }
 
@@ -229,6 +236,11 @@ function UninstallAppFull {
 
         Write-Output "Found application: $displayName"
         Write-Output "Attempting to uninstall: $displayName"
+
+        if ($ReportOnly) {
+            Write-Output "[ReportOnly] Would uninstall: $displayName"
+            continue
+        }
 
         try {
             # Try quiet uninstall string first if available
@@ -348,7 +360,9 @@ $WhitelistedApps = @(
     'Microsoft.MicrosoftEdge.Stable'
     'Microsoft.MPEG2VideoExtension',
     'Microsoft.HEVCVideoExtension',
-    'Microsoft.AV1VideoExtension'
+    'Microsoft.AV1VideoExtension',
+    'RealtekSemiconductorCorp.HPAudioControl',
+    'RealtekSemiconductorCorp.HPAudioControl_2.39.280.0_x64__dt26b99r8h8gj'
 )
 ##If $customwhitelist is set, split on the comma and add to whitelist
 if ($customwhitelist) {
@@ -432,52 +446,24 @@ $NonRemovable = @(
 ##Combine the two arrays
 $appstoignore = $WhitelistedApps += $NonRemovable
 
-##Bloat list for future reference
+##Bloat list - EXACT NAMES ONLY, NO WILDCARDS
 $Bloatware = @(
-    #Unnecessary Windows 10/11 AppX Apps
-    "*ActiproSoftwareLLC*"
-    "*AdobeSystemsIncorporated.AdobePhotoshopExpress*"
-    "*BubbleWitch3Saga*"
-    "*CandyCrush*"
-    "*DevHome*"
-    "*Disney*"
-    "*Dolby*"
-    "*Duolingo-LearnLanguagesforFree*"
-    "*EclipseManager*"
-    "*Facebook*"
-    "*Flipboard*"
-    "*gaming*"
-    "*Minecraft*"
-    "*Office*"
-    "*PandoraMediaInc*"
-    "*Royal Revolt*"
-    "*Speed Test*"
-    "*Sway*"
-    "*Twitter*"
-    "*Wunderlist*"
-    "AD2F1837.HPPrinterControl"
-    "AppUp.IntelGraphicsExperience"
-    "C27EB4BA.DropboxOEM*"
-    "Disney.37853FC22B2CE"
-    "DolbyLaboratories.DolbyAccess"
-    "DolbyLaboratories.DolbyAudio"
-    "E0469640.SmartAppearance"
-    "Microsoft.549981C3F5F10"
-    "Microsoft.AV1VideoExtension"
+    # Microsoft Bloatware - Exact names only
+    "Microsoft.3DBuilder"
+    "Microsoft.BingFinance"
     "Microsoft.BingNews"
-    "Microsoft.BingSearch"
+    "Microsoft.BingSports"
     "Microsoft.BingWeather"
+    "Microsoft.BingSearch"
     "Microsoft.GetHelp"
     "Microsoft.Getstarted"
     "Microsoft.GamingApp"
     "Microsoft.Messaging"
     "Microsoft.Microsoft3DViewer"
-    "Microsoft.MicrosoftEdge.Stable"
     "Microsoft.MicrosoftJournal"
     "Microsoft.MicrosoftOfficeHub"
     "Microsoft.MicrosoftSolitaireCollection"
     "Microsoft.MixedReality.Portal"
-    "Microsoft.MPEG2VideoExtension"
     "Microsoft.News"
     "Microsoft.Office.Lens"
     "Microsoft.Office.Sway"
@@ -496,7 +482,6 @@ $Bloatware = @(
     "Microsoft.XboxApp"
     "Microsoft.XboxGameOverlay"
     "Microsoft.XboxGamingOverlay"
-    "Microsoft.XboxGamingOverlay_5.721.10202.0_neutral_~_8wekyb3d8bbwe"
     "Microsoft.XboxIdentityProvider"
     "Microsoft.XboxSpeechToTextOverlay"
     "Microsoft.ZuneMusic"
@@ -504,17 +489,41 @@ $Bloatware = @(
     "MicrosoftCorporationII.MicrosoftFamily"
     "MicrosoftCorporationII.QuickAssist"
     "MicrosoftWindows.CrossDevice"
+
+    # Third-party bloatware - Exact names
+    "ActiproSoftwareLLC.562882FEEB491"
+    "AD2F1837.HPPrinterControl"
+    "AppUp.IntelGraphicsExperience"
+    "C27EB4BA.DropboxOEM"
+    "Disney.37853FC22B2CE"
+    "DolbyLaboratories.DolbyAccess"
+    "DolbyLaboratories.DolbyAudio"
+    "E0469640.SmartAppearance"
     "MirametrixInc.GlancebyMirametrix"
     "RealtimeboardInc.RealtimeBoard"
     "5A894077.McAfeeSecurity"
-    "5A894077.McAfeeSecurity_2.1.27.0_x64__wafk5atnkzcwy"
+
+    # Games and entertainment that are commonly considered bloatware
+    "king.com.BubbleWitch3Saga"
+    "king.com.CandyCrushSaga"
+    "king.com.CandyCrushSodaSaga"
+    "Microsoft.MinecraftUWP"
 )
 
+# Now use EXACT matching instead of wildcard matching
+$provisioned = Get-AppxProvisionedPackage -Online | Where-Object {
+    $_.DisplayName -in $Bloatware -and
+    $_.DisplayName -notin $appstoignore -and
+    $_.DisplayName -notlike 'MicrosoftWindows.Voice*' -and
+    $_.DisplayName -notlike 'Microsoft.LanguageExperiencePack*' -and
+    $_.DisplayName -notlike 'MicrosoftWindows.Speech*'
+}
 
-$provisioned = Get-AppxProvisionedPackage -Online | Where-Object { $_.DisplayName -in $Bloatware -and $_.DisplayName -notin $appstoignore -and $_.DisplayName -notlike 'MicrosoftWindows.Voice*' -and $_.DisplayName -notlike 'Microsoft.LanguageExperiencePack*' -and $_.DisplayName -notlike 'MicrosoftWindows.Speech*' }
 foreach ($appxprov in $provisioned) {
     $packagename = $appxprov.PackageName
     $displayname = $appxprov.DisplayName
+    Add-RemovalPlanEntry -Type 'AppXProvisioned' -Name $displayname -Reason 'In Bloatware list'
+    if ($ReportOnly) { write-output "[ReportOnly] Would remove provisioned package $displayname"; continue }
     write-output "Removing $displayname AppX Provisioning Package"
     try {
         Remove-AppxProvisionedPackage -PackageName $packagename -Online -ErrorAction SilentlyContinue
@@ -523,14 +532,22 @@ foreach ($appxprov in $provisioned) {
     catch {
         write-output "Unable to remove $displayname AppX Provisioning Package"
     }
-
 }
 
+# Use EXACT matching for installed packages too
+$appxinstalled = Get-AppxPackage -AllUsers | Where-Object {
+    $_.Name -in $Bloatware -and
+    $_.Name -notin $appstoignore -and
+    $_.Name -notlike 'MicrosoftWindows.Voice*' -and
+    $_.Name -notlike 'Microsoft.LanguageExperiencePack*' -and
+    $_.Name -notlike 'MicrosoftWindows.Speech*'
+}
 
-$appxinstalled = Get-AppxPackage -AllUsers | Where-Object { $_.Name -in $Bloatware -and $_.Name -notin $appstoignore -and $_.Name -notlike 'MicrosoftWindows.Voice*' -and $_.Name -notlike 'Microsoft.LanguageExperiencePack*' -and $_.Name -notlike 'MicrosoftWindows.Speech*' }
 foreach ($appxapp in $appxinstalled) {
     $packagename = $appxapp.PackageFullName
     $displayname = $appxapp.Name
+    Add-RemovalPlanEntry -Type 'AppX' -Name $displayname -Reason 'In Bloatware list'
+    if ($ReportOnly) { write-output "[ReportOnly] Would remove AppX $displayname"; continue }
     write-output "$displayname AppX Package exists"
     write-output "Removing $displayname AppX Package"
     try {
@@ -1331,10 +1348,8 @@ if ($manufacturer -like "*HP*") {
         "AD2F1837.HPSupportAssistant"
         "AD2F1837.HPSystemInformation"
         "AD2F1837.myHP"
-        "RealtekSemiconductorCorp.HPAudioControl",
         "HP Sure Recover",
         "HP Sure Run Module"
-        "RealtekSemiconductorCorp.HPAudioControl_2.39.280.0_x64__dt26b99r8h8gj"
         "Windows Driver Package - HP Inc. sselam_4_4_2_453 AntiVirus  (11/01/2022 4.4.2.453)"
         "HP Insights"
         "HP Insights Analytics"
@@ -1345,35 +1360,24 @@ if ($manufacturer -like "*HP*") {
 
 
 
-    $UninstallPrograms = $UninstallPrograms | Where-Object { $appstoignore -notcontains $_ }
+    $UninstallPrograms = $UninstallPrograms | Where-Object { $_ -and $_.Trim() -ne '' } | Select-Object -Unique
+
 
     # Only attempt to uninstall HP-specific applications
     foreach ($app in $UninstallPrograms) {
-
-        if (Get-AppxProvisionedPackage -Online | Where-Object DisplayName -like $app -ErrorAction SilentlyContinue) {
-            Get-AppxProvisionedPackage -Online | Where-Object DisplayName -like $app | Remove-AppxProvisionedPackage -Online
-            write-output "Removed provisioned package for $app."
-        }
-        else {
-            write-output "Provisioned package for $app not found."
-        }
-
+        Add-RemovalPlanEntry -Type 'Win32' -Name $app -Reason 'HP Manufacturer list'
+        if ($ReportOnly) { write-output "[ReportOnly] Would uninstall HP app $app"; continue }
+        #if (Get-AppxProvisionedPackage -Online | Where-Object DisplayName -eq $app -ErrorAction SilentlyContinue) {
+        #    Get-AppxProvisionedPackage -Online | Where-Object DisplayName -eq $app | Remove-AppxProvisionedPackage -Online
+        #    write-output "Removed provisioned package for $app."
+        #}
+        #else { write-output "Provisioned package for $app not found." }
         if (Get-AppxPackage -allusers -Name $app -ErrorAction SilentlyContinue) {
             Get-AppxPackage -allusers -Name $app | Remove-AppxPackage -AllUsers
-            write-output "Removed $app."
-        }
-        else {
-            write-output "$app not found."
-        }
-
+            write-output "Removed $app." }
+        else { write-output "$app not found." }
         UninstallAppFull -appName $app
     }
-
-
-
-
-
-    ##Belt and braces, remove via CIM too
     #foreach ($program in $UninstallPrograms) {
     #    Get-CimInstance -Classname Win32_Product | Where-Object Name -Match $program | Invoke-CimMethod -MethodName Uninstall
     #}
@@ -1429,9 +1433,8 @@ foreach ($pattern in $packagePatterns) {
     $minVersion = $pattern.MinVersion
     Write-Output "Checking for packages matching pattern: $patternName"
     
-    # Search for matching packages in the registry
-    $matchingPackages = @()
-    
+    # Search for matching packages in the registry    $matchingPackages = @()
+
     # Check in 32-bit and 64-bit registry locations
     $registryPaths = @(
         "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\*",
@@ -1581,33 +1584,19 @@ if ($manufacturer -like "*Dell*") {
 
 
 
-    $UninstallPrograms = $UninstallPrograms | Where-Object { $appstoignore -notcontains $_ }
-
-
+    $UninstallPrograms = $UninstallPrograms | Where-Object { $_ -and $_.Trim() -ne '' } | Select-Object -Unique
     foreach ($app in $UninstallPrograms) {
-
-        if (Get-AppxProvisionedPackage -Online | Where-Object DisplayName -like $app -ErrorAction SilentlyContinue) {
-            Get-AppxProvisionedPackage -Online | Where-Object DisplayName -like $app | Remove-AppxProvisionedPackage -Online
-            write-output "Removed provisioned package for $app."
-        }
-        else {
-            write-output "Provisioned package for $app not found."
-        }
-
+        Add-RemovalPlanEntry -Type 'Win32' -Name $app -Reason 'Dell Manufacturer list'
+        if ($ReportOnly) { write-output "[ReportOnly] Would uninstall Dell app $app"; continue }
+        #if (Get-AppxProvisionedPackage -Online | Where-Object DisplayName -eq $app -ErrorAction SilentlyContinue) {
+        #    Get-AppxProvisionedPackage -Online | Where-Object DisplayName -eq $app | Remove-AppxProvisionedPackage -Online
+        #    write-output "Removed provisioned package for $app." }
         if (Get-AppxPackage -allusers -Name $app -ErrorAction SilentlyContinue) {
             Get-AppxPackage -allusers -Name $app | Remove-AppxPackage -AllUsers
-            write-output "Removed $app."
-        }
-        else {
-            write-output "$app not found."
-        }
-
+            write-output "Removed $app." }
+        else { write-output "$app not found." }
         UninstallAppFull -appName $app
-
-
     }
-
-    ##Belt and braces, remove via CIM too
     #foreach ($program in $UninstallPrograms) {
     #    Get-CimInstance -Classname Win32_Product | Where-Object Name -Match $program | Invoke-CimMethod -MethodName Uninstall
     #}
@@ -1765,29 +1754,20 @@ if ($manufacturer -like "Lenovo") {
     )
 
 
-    $UninstallPrograms = $UninstallPrograms | Where-Object { $appstoignore -notcontains $_ }
-
+    $UninstallPrograms = $UninstallPrograms | Where-Object { $_ -and $_.Trim() -ne '' } | Select-Object -Unique
 
 
     # Only attempt to uninstall Lenovo-specific applications
     foreach ($app in $UninstallPrograms) {
-
-        if (Get-AppxProvisionedPackage -Online | Where-Object DisplayName -like $app -ErrorAction SilentlyContinue) {
-            Get-AppxProvisionedPackage -Online | Where-Object DisplayName -like $app | Remove-AppxProvisionedPackage -Online
-            write-output "Removed provisioned package for $app."
-        }
-        else {
-            write-output "Provisioned package for $app not found."
-        }
-
+        Add-RemovalPlanEntry -Type 'Win32' -Name $app -Reason 'Lenovo Manufacturer list'
+        if ($ReportOnly) { write-output "[ReportOnly] Would uninstall Lenovo app $app"; continue }
+        #if (Get-AppxProvisionedPackage -Online | Where-Object DisplayName -eq $app -ErrorAction SilentlyContinue) {
+        #    Get-AppxProvisionedPackage -Online | Where-Object DisplayName -eq $app | Remove-AppxProvisionedPackage -Online
+        #    write-output "Removed provisioned package for $app." }
         if (Get-AppxPackage -allusers -Name $app -ErrorAction SilentlyContinue) {
             Get-AppxPackage -allusers -Name $app | Remove-AppxPackage -AllUsers
-            write-output "Removed $app."
-        }
-        else {
-            write-output "$app not found."
-        }
-
+            write-output "Removed $app." }
+        else { write-output "$app not found." }
         UninstallAppFull -appName $app
 
     }

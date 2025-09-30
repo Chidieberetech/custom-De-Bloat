@@ -199,6 +199,21 @@ Else {
 
 Start-Transcript -Path "C:\ProgramData\Debloat\Debloat.log"
 
+# Helper: record planned removals
+if (-not (Test-Path $RemovalReportPath)) {
+    try { New-Item -ItemType File -Path $RemovalReportPath -Force | Out-Null } catch {}
+}
+$global:RemovalPlan = @()
+function Add-RemovalPlanEntry {
+    param(
+        [string]$Type,
+        [string]$Name,
+        [string]$Reason
+    )
+    $line = "$(Get-Date -Format o)`t$Type`t$Name`t$Reason"
+    $global:RemovalPlan += $line
+}
+
 function UninstallAppFull {
     param (
         [string]$appName
@@ -2031,6 +2046,16 @@ if ($mcafeeinstalled -eq "true") {
         }
         Catch { Write-Warning -Message "Failed to uninstall: [$($_.DisplayName)]" }
     }
+}
+
+# At end before cleanup write report
+if ($RemovalPlan.Count -gt 0) {
+    "Timestamp`tType`tName`tReason" | Out-File -FilePath $RemovalReportPath -Encoding UTF8 -Force
+    $RemovalPlan | Out-File -FilePath $RemovalReportPath -Encoding UTF8 -Append
+    Write-Output "Removal plan written to $RemovalReportPath"
+    if ($ReportOnly) { Write-Output "ReportOnly mode: No changes actually performed." }
+} else {
+    Write-Output "No items planned for removal."
 }
 
 # Clean up Debloat folder

@@ -1153,8 +1153,6 @@ if ($version -like "*Windows 11*") {
 '@
 
     $blankjson | Out-File "C:\Users\Default\AppData\Local\Microsoft\Windows\Shell\LayoutModification.xml" -Encoding utf8 -Force
-    $intunepath = "HKLM:\SOFTWARE\Microsoft\IntuneManagementExtension\Win32Apps"
-    $intunecomplete = @(Get-ChildItem $intunepath).count
     $userpath = "HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\ProfileList"
     $userprofiles = Get-ChildItem $userpath | ForEach-Object { Get-ItemProperty $_.PSPath }
 
@@ -1347,7 +1345,7 @@ if ($manufacturer -like "*HP*") {
     Get-CimInstance -ClassName Win32_Product | Where-Object { $_.Name -eq 'HP Security Update Service' } | Invoke-CimMethod -MethodName Uninstall
 
     # Main execution
-    Write-Log "Starting HP security package uninstallation process"
+    Write-Output "Starting HP security package uninstallation process"
 
     # Define packages and criteria
     $packagePatterns = @(
@@ -1470,10 +1468,6 @@ foreach ($pattern in $packagePatterns) {
         }
     }
 }
-
-    write-output "Removed HP bloat"
-}
-
 
 
 if ($manufacturer -like "*Dell*") {
@@ -1815,8 +1809,6 @@ if ($manufacturer -like "Lenovo") {
         # Remove Lenovo Now
         Set-Location "c:\program files (x86)\lenovo\lenovowelcome\x86"
 
-        # Update $PSScriptRoot with the new working directory
-        $PSScriptRoot = (Get-Item -Path ".\").FullName
         try {
             invoke-expression -command .\uninstall.ps1 -ErrorAction SilentlyContinue
         }
@@ -1832,8 +1824,6 @@ if ($manufacturer -like "Lenovo") {
         # Remove Lenovo Now
         Set-Location "c:\program files (x86)\lenovo\LenovoNow\x86"
 
-        # Update $PSScriptRoot with the new working directory
-        $PSScriptRoot = (Get-Item -Path ".\").FullName
         try {
             invoke-expression -command .\uninstall.ps1 -ErrorAction SilentlyContinue
         }

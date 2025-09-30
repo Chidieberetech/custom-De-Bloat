@@ -20,7 +20,6 @@ C:\ProgramData\Debloat\Debloat.log
   Version:        5.1.28
   Purpose/Change: Initial script development
   Change: 12/08/2022 - Added additional HP applications
-  Change 23/09/2022 - Added Clipchamp (new in W11 22H2)
   Change 28/10/2022 - Fixed issue with Dell apps
   Change 23/11/2022 - Added Teams Machine wide to exceptions
   Change 27/11/2022 - Added Dell apps
@@ -240,8 +239,8 @@ function UninstallAppFull {
                 } else {
                     $parts = $quietUninstallString -split ' ', 2
                     $exe = $parts[0].Trim('"')
-                    $args = if ($parts.Count -gt 1) { $parts[1] } else { "" }
-                    Start-Process -FilePath $exe -ArgumentList $args -Wait -NoNewWindow
+                    $arguments = if ($parts.Count -gt 1) { $parts[1] } else { "" }
+                    Start-Process -FilePath $exe -ArgumentList $arguments -Wait -NoNewWindow
                 }
             }
             # Fall back to regular uninstall string
@@ -258,8 +257,8 @@ function UninstallAppFull {
                     # For EXE uninstallers, try to add silent parameters
                     $parts = $uninstallString -split ' ', 2
                     $exe = $parts[0].Trim('"')
-                    $args = if ($parts.Count -gt 1) { $parts[1] + " /S /silent" } else { "/S /silent" }
-                    Start-Process -FilePath $exe -ArgumentList $args -Wait -NoNewWindow
+                    $arguments = if ($parts.Count -gt 1) { $parts[1] + " /S /silent" } else { "/S /silent" }
+                    Start-Process -FilePath $exe -ArgumentList $arguments -Wait -NoNewWindow
                 }
             }
 
@@ -1519,9 +1518,9 @@ foreach ($pattern in $packagePatterns) {
                     # For EXE-based uninstalls, try to add silent parameters
                     $uninstallParts = $uninstallString -split ' ', 2
                     $uninstallExe = $uninstallParts[0].Trim('"')
-                    $uninstallArgs = if ($uninstallParts.Count -gt 1) { $uninstallParts[1] + " /S /silent /quiet /uninstall" } else { "/S /silent /quiet /uninstall" }
+                    $arguments = if ($uninstallParts.Count -gt 1) { $uninstallParts[1] + " /S /silent /quiet /uninstall" } else { "/S /silent /quiet /uninstall" }
 
-                    Start-Process -FilePath $uninstallExe -ArgumentList $uninstallArgs -Wait -NoNewWindow
+                    Start-Process -FilePath $uninstallExe -ArgumentList $arguments -Wait -NoNewWindow
                 }
                 Write-Output "Standard uninstall completed for: $displayName"
             } catch {
@@ -1533,6 +1532,8 @@ foreach ($pattern in $packagePatterns) {
     }
 }
 
+    write-output "Removed HP bloat"
+}
 
 if ($manufacturer -like "*Dell*") {
     write-output "Dell detected"

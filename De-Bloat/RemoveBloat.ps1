@@ -198,6 +198,106 @@ Else {
 
 Start-Transcript -Path "C:\ProgramData\Debloat\Debloat.log"
 
+# Add logging for version tracking
+write-output "Starting Debloat Script Version 5.1.28"
+write-output "Script Start Time: $((Get-Date).ToString('yyyy-MM-dd HH:mm:ss'))"
+
+# Initialize the $allstring variable for Win32 app removal
+write-output "Initializing Win32 application list..."
+$allstring = @()
+$registryPaths = @(
+    "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\*",
+    "HKLM:\SOFTWARE\Wow6432Node\Microsoft\Windows\CurrentVersion\Uninstall\*"
+)
+
+foreach ($path in $registryPaths) {
+    try {
+        $apps = Get-ItemProperty -Path $path -ErrorAction SilentlyContinue |
+                Where-Object { $_.DisplayName -and $_.UninstallString } |
+                Select-Object DisplayName, UninstallString, QuietUninstallString, @{Name="Name"; Expression={$_.DisplayName}}, @{Name="String"; Expression={$_.UninstallString}}
+        $allstring += $apps
+    }
+    catch {
+        write-output "Warning: Could not access registry path: $path"
+    }
+}
+write-output "Found $($allstring.Count) installed Win32 applications"
+
+# Define the UninstallAppFull function
+function UninstallAppFull {
+    param (
+        [string]$appName
+    )
+
+    if (-not $appName) {
+        write-output "Warning: No app name provided to UninstallAppFull"
+        return
+    }
+
+    write-output "Attempting to uninstall Win32 app: $appName"
+
+    # Get uninstall information for the specific app
+    $uninstallInfo = $allstring | Where-Object { $_.Name -eq $appName -or $_.Name -like "*$appName*" }
+
+    if (-not $uninstallInfo) {
+        write-output "Win32 app '$appName' not found in installed programs list"
+        return
+    }
+
+    foreach ($app in $uninstallInfo) {
+        $uninstallString = $app.QuietUninstallString
+        if (-not $uninstallString) {
+            $uninstallString = $app.UninstallString
+        }
+
+        if (-not $uninstallString) {
+            write-output "No uninstall string found for: $($app.Name)"
+            continue
+        }
+
+        write-output "Uninstalling: $($app.Name)"
+        write-output "Using uninstall string: $uninstallString"
+
+        try {
+            if ($uninstallString -match "msiexec") {
+                # Handle MSI uninstalls
+                $uninstallString = $uninstallString -replace "msiexec.exe", ""
+                $uninstallString = $uninstallString -replace "/I", "/X"
+                $uninstallString = $uninstallString.Trim()
+
+                if ($uninstallString -notmatch "/quiet") {
+                    $uninstallString += " /quiet /norestart"
+                }
+
+                Start-Process "msiexec.exe" -ArgumentList $uninstallString -Wait -NoNewWindow -ErrorAction Stop
+                write-output "Successfully uninstalled (MSI): $($app.Name)"
+            }
+            else {
+                # Handle EXE uninstalls
+                $uninstallParts = $uninstallString -split ' ', 2
+                $uninstallExe = $uninstallParts[0].Trim('"')
+                $uninstallArgs = if ($uninstallParts.Count -gt 1) { $uninstallParts[1] } else { "" }
+
+                # Add silent parameters if not present
+                if ($uninstallArgs -notmatch "/S|/silent|/quiet|--silent") {
+                    $uninstallArgs += " /S /silent"
+                }
+
+                if (Test-Path $uninstallExe) {
+                    Start-Process -FilePath $uninstallExe -ArgumentList $uninstallArgs -Wait -NoNewWindow -ErrorAction Stop
+                    write-output "Successfully uninstalled (EXE): $($app.Name)"
+                }
+                else {
+                    write-output "Uninstaller not found: $uninstallExe"
+                }
+            }
+        }
+        catch {
+            write-output "Failed to uninstall $($app.Name): $($_.Exception.Message)"
+        }
+    }
+}
+
 function Remove-CustomScheduledTasks {
     param (
         [string[]]$TaskNames
@@ -2016,10 +2116,35 @@ if ($mcafeeinstalled -eq "true") {
 
 
 
+# Only attempt Office removal if Office retail products are actually detected
+write-output "Checking for Office retail installations..."
+$officeDetected = $false
+
+# Check for retail Office installations
+$officeRetailProducts = @(
+    "*O365HomePremRetail*",
+    "*HomeStudent*Retail*",
+    "*HomeBusiness*Retail*",
+    "*Professional*Retail*",
+    "*VisioStdRetail*",
+    "*VisioProRetail*",
+    "*ProjectStdRetail*",
+    "*ProjectProRetail*"
+)
+
+foreach ($pattern in $officeRetailProducts) {
+    $found = $allstring | Where-Object { $_.Name -like $pattern }
+    if ($found) {
+        $officeDetected = $true
+        write-output "Found retail Office product: $($found.Name)"
+        break
+    }
+}
+
+if ($officeDetected) {
+    write-output "Retail Office products detected. Proceeding with removal..."
+
     ## The XML below will Remove Retail Copies of Office 365, including all languages. Note: Office Apps for Entreprise Editions will remain.
-
-    ##Check if they are installed first
-
 
     ## Remove Retail Copies XML Start ##
 $xml = @"
@@ -2083,6 +2208,7 @@ $xml = @"
     Start-Process -FilePath "C:\ProgramData\Debloat\setup.exe" -ArgumentList "/configure C:\ProgramData\Debloat\o365.xml" -WindowStyle Hidden -Wait
 
     write-output "Removed Office Retail Installations"
+}
 
 # Clean up Debloat folder
 Remove-Item -Path "C:\ProgramData\Debloat" -Recurse -Force

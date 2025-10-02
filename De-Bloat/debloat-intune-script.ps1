@@ -15,8 +15,23 @@ $zipUrl = "https://github.com/Chidieberetech/custom-De-Bloat/releases/download/2
 $zipPath = "$templateFilePath\RemoveBloat.zip"
 $extractPath = "$templateFilePath"
 
-Invoke-WebRequest -Uri $zipUrl -OutFile $zipPath
-Expand-Archive -Path $zipPath -DestinationPath $extractPath -Force
+Write-Output "Downloading RemoveBloat.zip from GitHub..."
+try {
+    Invoke-WebRequest -Uri $zipUrl -OutFile $zipPath -ErrorAction Stop
+    Write-Output "Download completed successfully."
+} catch {
+    Write-Error "Failed to download the script: $($_.Exception.Message)"
+    exit 1
+}
+
+Write-Output "Extracting RemoveBloat.zip..."
+try {
+    Expand-Archive -Path $zipPath -DestinationPath $extractPath -Force -ErrorAction Stop
+    Write-Output "Extraction completed successfully."
+} catch {
+    Write-Error "Failed to extract the archive: $($_.Exception.Message)"
+    exit 1
+}
 
 # The main script now uses a SAFE BLACKLIST approach that automatically protects:
 # - All Win32 applications that are NOT bloatware
@@ -30,12 +45,28 @@ Expand-Archive -Path $zipPath -DestinationPath $extractPath -Force
 # Define scheduled tasks to remove (if any). Leave empty for default behavior.
 $tasksToRemove = @()
 
-$pathwithfile = "$templateFilePath\removebloat.ps1"
+$pathwithfile = "$templateFilePath\RemoveBloat.ps1"
+
+# Verify the script file exists after extraction
+if (-not (Test-Path $pathwithfile)) {
+    Write-Error "RemoveBloat.ps1 not found at expected location: $pathwithfile"
+    Write-Output "Contents of ${templateFilePath}:"
+    Get-ChildItem $templateFilePath -Recurse | ForEach-Object { Write-Output "  $($_.FullName)" }
+    exit 1
+}
+
+Write-Output "Found RemoveBloat.ps1, executing debloat script..."
 
 # Execute the script - it will only target confirmed bloatware patterns
-if ($tasksToRemove.Count -gt 0) {
-    $tasksString = $tasksToRemove -join ','
-    & $pathwithfile -TasksToRemove $tasksString
-} else {
-    & $pathwithfile
+try {
+    if ($tasksToRemove.Count -gt 0) {
+        $tasksString = $tasksToRemove -join ','
+        & $pathwithfile -TasksToRemove $tasksString
+    } else {
+        & $pathwithfile
+    }
+    Write-Output "Debloat script completed successfully."
+} catch {
+    Write-Error "Failed to execute debloat script: $($_.Exception.Message)"
+    exit 1
 }

@@ -45,7 +45,7 @@ try {
 # Define scheduled tasks to remove (if any). Leave empty for default behavior.
 $tasksToRemove = @()
 
-$pathwithfile = "$templateFilePath\RemoveBloat.ps1"
+$pathwithfile = "$templateFilePath\RemoveBloat\RemoveBloat.ps1"
 
 # Verify the script file exists after extraction
 if (-not (Test-Path $pathwithfile)) {

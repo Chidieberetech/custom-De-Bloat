@@ -1370,133 +1370,113 @@ New-ItemProperty -Path $surf -Name 'AllowSurfGame' -Value 0 -PropertyType DWord
 
 
 
-############################################################################################################
-#                                        Remove Manufacturer Bloat                                         #
-#                                                                                                          #
-############################################################################################################
-##Check Manufacturer
+# ----------------------------------------------------------------------------------------------------------
+#                                        Remove Manufacturer Bloat (HP)
+# ----------------------------------------------------------------------------------------------------------
 write-output "Detecting Manufacturer"
 $details = Get-CimInstance -ClassName Win32_ComputerSystem
 $manufacturer = $details.Manufacturer
 
 if ($manufacturer -like "*HP*") {
     write-output "HP detected"
-    #Remove HP bloat
 
-
-    ##HP Specific
     $UninstallPrograms = @(
-        "Poly Lens"
-        "HP Client Security Manager"
-        "HP Notifications"
-        "HP Security Update Service"
-        "HP System Default Settings"
-        "HP Wolf Security"
-        "HP Wolf Security - Console"
-        "HP Wolf Security Application Support for Sure Sense"
-        "HP Wolf Security Application Support for Windows"
-        "HP Wolf Security Application Support for Chrome 122.0.6261.139"
-        "AD2F1837.HPPCHardwareDiagnosticsWindows"
-        "AD2F1837.HPPowerManager"
-        "AD2F1837.HPPrivacySettings"
-        "AD2F1837.HPQuickDrop"
-        "AD2F1837.HPSupportAssistant"
-        "AD2F1837.HPSystemInformation"
-        "AD2F1837.myHP"
+        "Poly Lens",
+        "HP Client Security Manager",
+        "HP Notifications",
+        "HP Security Update Service",
+        "HP System Default Settings",
+        "HP Wolf Security",
+        "HP Wolf Security - Console",
+        "HP Wolf Security Application Support for Sure Sense",
+        "HP Wolf Security Application Support for Windows",
+        "HP Wolf Security Application Support for Chrome 122.0.6261.139",
+        "AD2F1837.HPPCHardwareDiagnosticsWindows",
+        "AD2F1837.HPPowerManager",
+        "AD2F1837.HPPrivacySettings",
+        "AD2F1837.HPQuickDrop",
+        "AD2F1837.HPSupportAssistant",
+        "AD2F1837.HPSystemInformation",
+        "AD2F1837.myHP",
         "RealtekSemiconductorCorp.HPAudioControl",
         "HP Sure Recover",
-        "HP Sure Run Module"
-        "RealtekSemiconductorCorp.HPAudioControl_2.39.280.0_x64__dt26b99r8h8gj"
-        "Windows Driver Package - HP Inc. sselam_4_4_2_453 AntiVirus  (11/01/2022 4.4.2.453)"
-        "HP Insights"
-        "HP Insights Analytics"
-        "HP Insights Analytics - Dependencies"
-        "HP Performance Advisor"
+        "HP Sure Run Module",
+        "RealtekSemiconductorCorp.HPAudioControl_2.39.280.0_x64__dt26b99r8h8gj",
+        "Windows Driver Package - HP Inc. sselam_4_4_2_453 AntiVirus  (11/01/2022 4.4.2.453)",
+        "HP Insights",
+        "HP Insights Analytics",
+        "HP Insights Analytics - Dependencies",
+        "HP Performance Advisor",
         "HP Presence Video"
-    )
+    ) | Where-Object { $appstoignore -notcontains $_ }
 
-
-
-    $UninstallPrograms = $UninstallPrograms | Where-Object { $appstoignore -notcontains $_ }
-
-    # Only attempt to uninstall apps that are confirmed to be in our specific HP bloat list
     foreach ($app in $UninstallPrograms) {
-        # Additional safety check - only proceed if app is confirmed HP bloatware
-        $isConfirmedHPBloat = $app -match "HP (Client Security|Wolf Security|Security Update|Notifications|System Default|Sure|Performance Advisor|Presence Video|Insights)" -or
-                             $app -match "AD2F1837\.(HP|my)" -or
-                             $app -match "RealtekSemiconductorCorp\.HP" -or
-                             $app -match "Poly Lens"
+        $isConfirmedHPBloat =
+            ($app -match "HP (Client Security|Wolf Security|Security Update|Notifications|System Default|Sure|Performance Advisor|Presence Video|Insights)") -or
+            ($app -match "AD2F1837\.(HP|my)") -or
+            ($app -match "RealtekSemiconductorCorp\.HP") -or
+            ($app -match "Poly Lens")
 
         if (-not $isConfirmedHPBloat) {
             write-output "SAFETY: Skipping $app - not confirmed as HP bloatware pattern"
             continue
         }
 
-        if (Get-AppxProvisionedPackage -Online | Where-Object DisplayName -like $app -ErrorAction SilentlyContinue) {
-            Get-AppxProvisionedPackage -Online | Where-Object DisplayName -like $app | Remove-AppxProvisionedPackage -Online
+        if (Get-AppxProvisionedPackage -Online | Where-Object DisplayName -like $app) {
+            Get-AppxProvisionedPackage -Online | Where-Object DisplayName -like $app | Remove-AppxProvisionedPackage -Online -ErrorAction SilentlyContinue
             write-output "Removed provisioned package for $app."
-        }
-        else {
+        } else {
             write-output "Provisioned package for $app not found."
         }
 
-        if (Get-AppxPackage -allusers -Name $app -ErrorAction SilentlyContinue) {
-            Get-AppxPackage -allusers -Name $app | Remove-AppxPackage -AllUsers
+        if (Get-AppxPackage -AllUsers -Name $app -ErrorAction SilentlyContinue) {
+            Get-AppxPackage -AllUsers -Name $app | Remove-AppxPackage -AllUsers -ErrorAction SilentlyContinue
             write-output "Removed $app."
-        }
-        else {
+        } else {
             write-output "$app not found."
         }
 
-        # Only call UninstallAppFull if we're certain it's HP bloatware
         write-output "CONFIRMED HP BLOATWARE: Attempting to uninstall $app"
         UninstallAppFull -appName $app
     }
 
-
-    ##Belt and braces, remove via CIM too
-    #foreach ($program in $UninstallPrograms) {
-    #    Get-CimInstance -Classname Win32_Product | Where-Object Name -Match $program | Invoke-CimMethod -MethodName Uninstall
-    #}
-
-
-    #Remove HP Documentation if it exists
-    if (test-path -Path "C:\Program Files\HP\Documentation\Doc_uninstall.cmd") {
-        Start-Process -FilePath "C:\Program Files\HP\Documentation\Doc_uninstall.cmd" -Wait -passthru -NoNewWindow
+    # Remove HP documentation if present
+    if (Test-Path "C:\Program Files\HP\Documentation\Doc_uninstall.cmd") {
+        Start-Process -FilePath "C:\Program Files\HP\Documentation\Doc_uninstall.cmd" -Wait -NoNewWindow
     }
 
-    ##Remove HP Connect Optimizer if setup.exe exists
-    if (test-path -Path 'C:\Program Files (x86)\InstallShield Installation Information\{6468C4A5-E47E-405F-B675-A70A70983EA6}\setup.exe') {
-        invoke-webrequest -uri "https://raw.githubusercontent.com/Chidieberetech/custom-De-Bloat/main/De-Bloat/HPConnOpt.iss" -outfile "C:\Windows\Temp\HPConnOpt.iss"
-
-        &'C:\Program Files (x86)\InstallShield Installation Information\{6468C4A5-E47E-405F-B675-A70A70983EA6}\setup.exe' @('-s', '-f1C:\Windows\Temp\HPConnOpt.iss')
-    }
-    ##Remove HP Data Science Stack Manager
-    if (test-path -Path 'C:\Program Files\HP\Z By HP Data Science Stack Manager\Uninstall Z by HP Data Science Stack Manager.exe') {
-        &'C:\Program Files\HP\Z By HP Data Science Stack Manager\Uninstall Z by HP Data Science Stack Manager.exe' @('/allusers', '/S')
+    # HP Connect Optimizer
+    if (Test-Path 'C:\Program Files (x86)\InstallShield Installation Information\{6468C4A5-E47E-405F-B675-A70A70983EA6}\setup.exe') {
+        Invoke-WebRequest -Uri "https://raw.githubusercontent.com/Chidieberetech/custom-De-Bloat/main/De-Bloat/HPConnOpt.iss" -OutFile "C:\Windows\Temp\HPConnOpt.iss"
+        & 'C:\Program Files (x86)\InstallShield Installation Information\{6468C4A5-E47E-405F-B675-A70A70983EA6}\setup.exe' @('-s','-f1C:\Windows\Temp\HPConnOpt.iss')
     }
 
+    # HP Data Science Stack Manager
+    if (Test-Path 'C:\Program Files\HP\Z By HP Data Science Stack Manager\Uninstall Z by HP Data Science Stack Manager.exe') {
+        & 'C:\Program Files\HP\Z By HP Data Science Stack Manager\Uninstall Z by HP Data Science Stack Manager.exe' @('/allusers','/S')
+    }
 
-    ##Remove other crap
-    if (Test-Path -Path "C:\Program Files (x86)\HP\Shared" -PathType Container) { Remove-Item -Path "C:\Program Files (x86)\HP\Shared" -Recurse -Force }
-    if (Test-Path -Path "C:\Program Files (x86)\Online Services" -PathType Container) { Remove-Item -Path "C:\Program Files (x86)\Online Services" -Recurse -Force }
-    if (Test-Path -Path "C:\ProgramData\HP\TCO" -PathType Container) { Remove-Item -Path "C:\ProgramData\HP\TCO" -Recurse -Force }
-    if (Test-Path -Path "C:\ProgramData\Microsoft\Windows\Start Menu\Programs\Amazon.com.lnk" -PathType Leaf) { Remove-Item -Path "C:\ProgramData\Microsoft\Windows\Start Menu\Programs\Amazon.com.lnk" -Force }
-    if (Test-Path -Path "C:\ProgramData\Microsoft\Windows\Start Menu\Programs\Angebote.lnk" -PathType Leaf) { Remove-Item -Path "C:\ProgramData\Microsoft\Windows\Start Menu\Programs\Angebote.lnk" -Force }
-    if (Test-Path -Path "C:\ProgramData\Microsoft\Windows\Start Menu\Programs\TCO Certified.lnk" -PathType Leaf) { Remove-Item -Path "C:\ProgramData\Microsoft\Windows\Start Menu\Programs\TCO Certified.lnk" -Force }
-    if (Test-Path -Path "C:\ProgramData\Microsoft\Windows\Start Menu\Programs\Booking.com.lnk" -PathType Leaf) { Remove-Item -Path "C:\ProgramData\Microsoft\Windows\Start Menu\Programs\Booking.com.lnk" -Force }
-    if (Test-Path -Path "C:\ProgramData\Microsoft\Windows\Start Menu\Programs\Adobe offers.lnk" -PathType Leaf) { Remove-Item -Path "C:\ProgramData\Microsoft\Windows\Start Menu\Programs\Adobe offers.lnk" -Force }
-    if (Test-Path -Path "C:\ProgramData\Microsoft\Windows\Start Menu\Programs\Miro Offer.lnk" -PathType Leaf) { Remove-Item -Path "C:\ProgramData\Microsoft\Windows\Start Menu\Programs\Miro offer.lnk" -Force }
+    # Remove leftover folders/shortcuts
+    if (Test-Path "C:\Program Files (x86)\HP\Shared") { Remove-Item "C:\Program Files (x86)\HP\Shared" -Recurse -Force }
+    if (Test-Path "C:\Program Files (x86)\Online Services") { Remove-Item "C:\Program Files (x86)\Online Services" -Recurse -Force }
+    if (Test-Path "C:\ProgramData\HP\TCO") { Remove-Item "C:\ProgramData\HP\TCO" -Recurse -Force }
+    foreach ($lnk in @(
+        "C:\ProgramData\Microsoft\Windows\Start Menu\Programs\Amazon.com.lnk",
+        "C:\ProgramData\Microsoft\Windows\Start Menu\Programs\Angebote.lnk",
+        "C:\ProgramData\Microsoft\Windows\Start Menu\Programs\TCO Certified.lnk",
+        "C:\ProgramData\Microsoft\Windows\Start Menu\Programs\Booking.com.lnk",
+        "C:\ProgramData\Microsoft\Windows\Start Menu\Programs\Adobe offers.lnk",
+        "C:\ProgramData\Microsoft\Windows\Start Menu\Programs\Miro offer.lnk"
+    )) { if (Test-Path $lnk) { Remove-Item $lnk -Force } }
 
-    ##Remove Wolf Security
-    Get-CimInstance -ClassName Win32_Product | Where-Object { $_.Name -eq 'HP Wolf Security' } | Invoke-CimMethod -MethodName Uninstall
-    Get-CimInstance -ClassName Win32_Product | Where-Object { $_.Name -eq 'HP Wolf Security - Console' } | Invoke-CimMethod -MethodName Uninstall
-    Get-CimInstance -ClassName Win32_Product | Where-Object { $_.Name -eq 'HP Security Update Service' } | Invoke-CimMethod -MethodName Uninstall
+    # Remove specific HP security products (best-effort)
+    Get-CimInstance -ClassName Win32_Product | Where-Object { $_.Name -eq 'HP Wolf Security' } | Invoke-CimMethod -MethodName Uninstall -ErrorAction SilentlyContinue
+    Get-CimInstance -ClassName Win32_Product | Where-Object { $_.Name -eq 'HP Wolf Security - Console' } | Invoke-CimMethod -MethodName Uninstall -ErrorAction SilentlyContinue
+    Get-CimInstance -ClassName Win32_Product | Where-Object { $_.Name -eq 'HP Security Update Service' } | Invoke-CimMethod -MethodName Uninstall -ErrorAction SilentlyContinue
 
-    # Main execution
-    Write-Log "Starting HP security package uninstallation process"
+    # Replace Write-Log with Write-Output (no custom logger defined)
+    Write-Output "Starting HP security package uninstallation process"
 
-    # Define packages and criteria
     $packagePatterns = @(
         @{ Name = "HP Client Security Manager"; MinVersion = "10.0.0" },
         @{ Name = "HP Wolf Security(?!.*Console)" },
@@ -1504,119 +1484,81 @@ if ($manufacturer -like "*HP*") {
         @{ Name = "HP Security Update Service" }
     )
 
-# Process each package pattern
-foreach ($pattern in $packagePatterns) {
-    $patternName = $pattern.Name
-    $minVersion = $pattern.MinVersion
-    Write-Output "Checking for packages matching pattern: $patternName"
+    foreach ($pattern in $packagePatterns) {
+        $patternName = $pattern.Name
+        $minVersion  = $pattern.MinVersion
+        Write-Output "Checking for packages matching pattern: $patternName"
 
-    # Search for matching packages in the registry
-    $matchingPackages = @()
-
-    # Check in 32-bit and 64-bit registry locations
-    $registryPaths = @(
-        "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\*",
-        "HKLM:\SOFTWARE\Wow6432Node\Microsoft\Windows\CurrentVersion\Uninstall\*"
-    )
-
-    foreach ($registryPath in $registryPaths) {
-        $packages = Get-ItemProperty -Path $registryPath -ErrorAction SilentlyContinue |
-                    Where-Object { $_.DisplayName -match $patternName }
-
-        # Filter by minimum version if specified
-        if ($minVersion -and $packages) {
-            $packages = $packages | Where-Object {
-                if ($_.DisplayVersion) {
-                    try {
-                        [version]$_.DisplayVersion -ge [version]$minVersion
-                    } catch {
-                        # If version comparison fails, include it anyway for safety
-                        $true
-                    }
-                } else {
-                    # If no version information, include it for safety
-                    $true
+        $matchingPackages = @()
+        foreach ($regPath in @(
+            "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\*",
+            "HKLM:\SOFTWARE\Wow6432Node\Microsoft\Windows\CurrentVersion\Uninstall\*"
+        )) {
+            $pkgs = Get-ItemProperty -Path $regPath -ErrorAction SilentlyContinue | Where-Object { $_.DisplayName -match $patternName }
+            if ($minVersion -and $pkgs) {
+                $pkgs = $pkgs | Where-Object {
+                    if ($_.DisplayVersion) {
+                        try { [version]$_.DisplayVersion -ge [version]$minVersion } catch { $true }
+                    } else { $true }
                 }
             }
+            $matchingPackages += $pkgs
         }
 
-        $matchingPackages += $packages
-    }
+        if ($matchingPackages.Count -eq 0) {
+            Write-Output "No packages found matching pattern: $patternName"
+            continue
+        }
 
-    if ($matchingPackages.Count -eq 0) {
-        Write-Output "No packages found matching pattern: $patternName"
-        continue
-    }
+        Write-Output "Found $($matchingPackages.Count) package(s) matching pattern: $patternName"
 
-    Write-Output "Found $($matchingPackages.Count) package(s) matching pattern: $patternName"
+        foreach ($package in $matchingPackages) {
+            $displayName           = $package.DisplayName
+            $uninstallString       = $package.UninstallString
+            $quietUninstallString  = $package.QuietUninstallString
+            $ver                   = $package.DisplayVersion
 
-    # Process each matching package
-    foreach ($package in $matchingPackages) {
-        $displayName = $package.DisplayName
-        $uninstallString = $package.UninstallString
-        $quietUninstallString = $package.QuietUninstallString
-        $version = $package.DisplayVersion
+            Write-Output "Attempting to uninstall: $displayName (Version: $ver)"
+            UninstallAppFull -appName $displayName
 
-        Write-Output "Attempting to uninstall: $displayName (Version: $version)"
-
-        # Try to use the UninstallAppFull function first
-        Write-Output "Trying to uninstall via UninstallAppFull..."
-        UninstallAppFull -appName $displayName
-
-        # If UninstallAppFull doesn't work, fall back to direct uninstallation
-        # Check if uninstall string exists and attempt uninstall
-        if ($quietUninstallString) {
-            Write-Output "Using quiet uninstall string: $quietUninstallString"
             try {
-                if ($quietUninstallString -match "msiexec") {
-                    # For MSI-based uninstalls, add /quiet
-                    $uninstallCommand = $quietUninstallString + " /quiet"
-                    Start-Process "cmd.exe" -ArgumentList "/c $uninstallCommand" -Wait -NoNewWindow
-                } else {
-                    # For EXE-based uninstalls
-                    $uninstallParts = $quietUninstallString -split ' ', 2
-                    $uninstallExe = $uninstallParts[0].Trim('"')
-                    $uninstallArgs = if ($uninstallParts.Count -gt 1) { $uninstallParts[1] } else { "" }
-
-                    Start-Process -FilePath $uninstallExe -ArgumentList $uninstallArgs -Wait -NoNewWindow
-                }
-                Write-Output "Quiet uninstall completed for: $displayName"
-            } catch {
-                Write-Output "Error during quiet uninstall: $_"
-            }
-        } elseif ($uninstallString) {
-            Write-Output "Using standard uninstall string: $uninstallString"
-            try {
-                if ($uninstallString -match "msiexec") {
-                    # For MSI-based uninstalls, add /quiet
-                    if ($uninstallString -match "/I{") {
-                        # Change /I to /X for uninstall if needed
-                        $uninstallString = $uninstallString -replace "/I", "/X"
+                if ($quietUninstallString) {
+                    Write-Output "Using quiet uninstall string."
+                    if ($quietUninstallString -match "msiexec") {
+                        $cmd = $quietUninstallString + " /quiet"
+                        Start-Process "cmd.exe" -ArgumentList "/c $cmd" -Wait -NoNewWindow
+                    } else {
+                        $parts = $quietUninstallString -split ' ', 2
+                        $exe   = $parts[0].Trim('"')
+                        $args  = if ($parts.Count -gt 1) { $parts[1] } else { "" }
+                        Start-Process -FilePath $exe -ArgumentList $args -Wait -NoNewWindow
                     }
-                    $uninstallCommand = $uninstallString + " /quiet"
-                    Start-Process "cmd.exe" -ArgumentList "/c $uninstallCommand" -Wait -NoNewWindow
-                } else {
-                    # For EXE-based uninstalls
-                    $uninstallParts = $uninstallString -split ' ', 2
-                    $uninstallExe = $uninstallParts[0].Trim('"')
-                    $uninstallArgs = if ($uninstallParts.Count -gt   1) { $uninstallParts[1] } else { "" }
-
-                    # Add silent parameters for common installers
-                    if ($uninstallString -match "uninstall.exe|uninst.exe|setup.exe|installer.exe") {
-                        $uninstallArgs += " /S /silent /quiet /uninstall"
+                } elseif ($uninstallString) {
+                    Write-Output "Using standard uninstall string."
+                    if ($uninstallString -match "msiexec") {
+                        if ($uninstallString -match "/I{") { $uninstallString = $uninstallString -replace "/I", "/X" }
+                        $cmd = $uninstallString + " /quiet"
+                        Start-Process "cmd.exe" -ArgumentList "/c $cmd" -Wait -NoNewWindow
+                    } else {
+                        $parts = $uninstallString -split ' ', 2
+                        $exe   = $parts[0].Trim('"')
+                        $args  = if ($parts.Count -gt 1) { $parts[1] } else { "" }
+                        if ($uninstallString -match "uninstall.exe|uninst.exe|setup.exe|installer.exe") {
+                            $args += " /S /silent /quiet /uninstall"
+                        }
+                        Start-Process -FilePath $exe -ArgumentList $args -Wait -NoNewWindow
                     }
-
-                    Start-Process -FilePath $uninstallExe -ArgumentList $uninstallArgs -Wait -NoNewWindow
+                } else {
+                    Write-Output "No uninstall string found for: $displayName"
                 }
-                Write-Output "Standard uninstall completed for: $displayName"
+                Write-Output "Uninstall attempt completed for: $displayName"
             } catch {
-                Write-Output "Error during standard uninstall: $_"
+                Write-Output "Error during uninstall of $displayName : $_"
             }
-        } else {
-            Write-Output "No uninstall string found for: $displayName"
         }
     }
 }
+
 
 ############################################################################################################
 #                                        Remove Any other installed crap                                   #
@@ -1856,5 +1798,5 @@ write-output "Total Script $($runTimeFormatted)"
 #Set ProgressPreerence back
 $ProgressPreference = $OrginalProgressPreference
 Stop-Transcript
-Fall
+# End of Script
 

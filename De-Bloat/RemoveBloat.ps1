@@ -130,8 +130,9 @@ If (!([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]:
     Start-Sleep 1
     write-output "                                               1"
     Start-Sleep 1
-    #Start-Process powershell.exe -ArgumentList ("-NoProfile -ExecutionPolicy Bypass -File `"{0}`" -WhitelistApps {1}" -f $PSCommandPath, ($WhitelistApps -join ',')) -Verb RunAs
-    Start-Process powershell.exe -ArgumentList ("-NoProfile -ExecutionPolicy Bypass -File `"{0}`" -customwhitelist {1} -TasksToRemove {2}" -f $PSCommandPath, ($customwhitelist -join ','), ($TasksToRemove -join ',')) -Verb RunAs
+    # Force 64-bit Windows PowerShell host when elevating
+    $ps64 = "$env:WINDIR\System32\WindowsPowerShell\v1.0\powershell.exe"
+    Start-Process $ps64 -ArgumentList ("-NoProfile -ExecutionPolicy Bypass -File `"{0}`" -customwhitelist {1} -TasksToRemove {2}" -f $PSCommandPath, ($customwhitelist -join ','), ($TasksToRemove -join ',')) -Verb RunAs
     Exit
 }
 
@@ -161,6 +162,9 @@ Start-Transcript -Path "C:\ProgramData\Debloat\Debloat.log"
 # Add logging for version tracking
 write-output "Starting Debloat Script Version 5.1.28"
 write-output "Script Start Time: $((Get-Date).ToString('yyyy-MM-dd HH:mm:ss'))"
+
+# Initialize the $TasksToRemove parameter to prevent null issues
+if (-not $TasksToRemove) { $TasksToRemove = @() }
 
 # Initialize the $allstring variable for Win32 app removal
 write-output "Initializing Win32 application list..."
@@ -585,7 +589,43 @@ $Bloatware = @(
 )
 
 
-$provisioned = Get-AppxProvisionedPackage -Online | Where-Object { $_.DisplayName -in $Bloatware -and $_.DisplayName -notin $appstoignore -and $_.DisplayName -notlike 'MicrosoftWindows.Voice*' -and $_.DisplayName -notlike 'Microsoft.LanguageExperiencePack*' -and $_.DisplayName -notlike 'MicrosoftWindows.Speech*' }
+# Check if AppX stack is available before proceeding
+$canDoAppx = Test-AppxStackReady
+
+if ($canDoAppx) {
+    Write-Output "Phase: Enumerating provisioned AppX packages..."
+    try {
+        $provisioned = Get-AppxProvisionedPackage -Online | Where-Object {
+            (Test-MatchesAny $_.DisplayName $Bloatware) -and
+            -not (Test-MatchesAny $_.DisplayName $appstoignore) -and
+            $_.DisplayName -notlike 'MicrosoftWindows.Voice*' -and
+            $_.DisplayName -notlike 'Microsoft.LanguageExperiencePack*' -and
+            $_.DisplayName -notlike 'MicrosoftWindows.Speech*'
+        }
+    } catch {
+        Write-Output "Provisioned AppX query failed: $($_.Exception.Message)"
+        $provisioned = @()
+    }
+
+    Write-Output "Phase: Enumerating installed AppX packages (AllUsers)..."
+    try {
+        $appxinstalled = Get-AppxPackage -AllUsers | Where-Object {
+            (Test-MatchesAny $_.Name $Bloatware) -and
+            -not (Test-MatchesAny $_.Name $appstoignore) -and
+            $_.Name -notlike 'MicrosoftWindows.Voice*' -and
+            $_.Name -notlike 'Microsoft.LanguageExperiencePack*' -and
+            $_.Name -notlike 'MicrosoftWindows.Speech*'
+        }
+    } catch {
+        Write-Output "Installed AppX query failed: $($_.Exception.Message)"
+        $appxinstalled = @()
+    }
+} else {
+    Write-Output "Skipping AppX removal because AppX stack is unavailable."
+    $provisioned   = @()
+    $appxinstalled = @()
+}
+
 foreach ($appxprov in $provisioned) {
     $packagename = $appxprov.PackageName
     $displayname = $appxprov.DisplayName
@@ -601,7 +641,6 @@ foreach ($appxprov in $provisioned) {
 }
 
 
-$appxinstalled = Get-AppxPackage -AllUsers | Where-Object { $_.Name -in $Bloatware -and $_.Name -notin $appstoignore -and $_.Name -notlike 'MicrosoftWindows.Voice*' -and $_.Name -notlike 'Microsoft.LanguageExperiencePack*' -and $_.Name -notlike 'MicrosoftWindows.Speech*' }
 foreach ($appxapp in $appxinstalled) {
     $packagename = $appxapp.PackageFullName
     $displayname = $appxapp.Name
